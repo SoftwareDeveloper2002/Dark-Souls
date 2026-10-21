@@ -1,0 +1,5 @@
+Voices / creature / ambience (all CC0) from OpenGameArt:
+- hurt_01..06: "Hurt Sound Effects" by EZduzziteh
+- yelling sounds (grunts, yells): "Male Grunt/Yelling sounds" by HaelDB (CC0 option)
+- crt_*: "80 CC0 creature SFX" and "#2" by rubberduck; "Monster snarls" by Darsycho
+- amb_crickets: "Crickets ambient noise" by Wolfgang_; amb_wind: "Icy Heights" wind by Ecrivain; amb_gust: "wind whoosh loop" by SketchMan3
