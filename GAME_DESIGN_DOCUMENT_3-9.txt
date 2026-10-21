@@ -1,0 +1,247 @@
+DARK SOULS (MOBILE) - GAME DESIGN DOCUMENT, SECTIONS 3 TO 9
+Engine: Godot 4.7.2 | Target: Android (arm64) | Version 1.12.0 (code 23)
+
+NOTE: Sections 1 and 2 (not covered here) are the concept / story overview. Everything below describes the game as it is built.
+
+
+======================================================================
+3. CONTROLS AND CAMERA
+======================================================================
+
+3.1 Input map
+
+Touch (phone):
+  Left half of screen ........ virtual stick: move
+  Right half of screen ....... drag: look / rotate camera (used mainly in the labyrinth)
+  Buttons .................... ATTACK, ROLL (dodge), BLOCK, ESTUS (heal), SKILL 1, SKILL 2,
+                               SWAP (weapon), TORCH (labyrinth only), COMMAND (labyrinth only,
+                               after a civilian is rescued), MAP, PAUSE
+
+Keyboard (PC testing):
+  Move with WASD / arrows, Q swap weapon, T torch, F command civilians, Z / C look left / right.
+  Attack, roll, block, estus, skills and pause have their own keys (listed on the title screen's help page).
+
+3.2 Camera
+  - Open world: top-down / three-quarter chase camera that follows the hero.
+  - Labyrinth: lower third-person camera behind the hero, FOV widens from 45 to 68 so the very
+    high walls feel oppressive. The hero always faces where the camera looks.
+  - Walls block the camera: it is pushed in front of a wall instead of clipping through it.
+  - Trees between camera and hero become see-through (opacity fade) instead of the camera moving.
+  - In the labyrinth the stick strafes relative to the camera; dragging the right side turns it.
+
+3.3 Accessibility and readability
+  - Large touch buttons with labels and icons; the COMMAND button shows STAY or FOLLOW.
+  - Banners and floating text announce every important event (quest start, torch dropped, fail).
+  - Voice lines for enemies, bosses, civilians and announcements, so the game is playable by sound too.
+  - Health / stamina bars, boss bar, civilian health bars drawn on top of the world.
+  - Settings: music on/off, sound effects on/off, FPS counter, graphics level, frame-rate cap.
+  - Darkness in the labyrinth is strong but the torch light keeps the near area readable.
+
+
+======================================================================
+4. LEVEL DESIGN
+======================================================================
+
+4.1 World layout
+  - One large forest map generated on Terrain3D terrain, with trees drawn as MultiMesh chunks.
+  - A clickable map screen shows quest sites. Sites are placed along a route that leads from the
+    start toward the final locations; each quest gets a site and an arena.
+  - Landmarks: camps, ruins, emblem hiding places, the princess's prison, and the labyrinth.
+
+4.2 Quest / arena structure
+  - Each quest flattens a circular arena at its site; enemies spawn in a camp, then the quest is
+    complete when the objective is done (kill all, kill the boss, find emblems, rescue, etc.).
+  - Boundaries: the arena edge is marked by the forest and by collision; enemies do not leave it.
+  - Spawn points: enemy camps are placed around the arena centre at a safe distance from the hero.
+
+4.3 The labyrinth (quest 27)
+  - 15 x 15 cell maze, 6 m cells, 7.5 m high walls, generated with a recursive backtracker
+    (fixed seed, so every player gets the same maze).
+  - Entrance and exit gates, 7 chests, 14 wall torches, civilians hidden in dead-end pockets,
+    13 monsters spread away from the civilians.
+  - Route: enter -> explore in the dark -> rescue every civilian -> lead them to the far gate.
+  - Rationale: the maze is the "horror" level of the game; darkness, high walls and a third-person
+    camera create tension that the open world does not have.
+
+4.4 Rationale
+  The game moves from open, readable combat (learn the weapons and skills) to constrained
+  encounters (boss, maze) so difficulty comes from the space as well as from enemy stats.
+
+
+======================================================================
+5. CHARACTERS AND ABILITIES
+======================================================================
+
+5.1 The hero
+  - Stats: health, stamina, level and experience, strength-style damage scaling from weapon,
+    healing flask (Estus) with limited charges, rage meter that builds from taking and dealing hits.
+  - Actions: light attack combo, roll with brief invulnerability, block (costs stamina),
+    two weapon skills, weapon swap, execution (see 6.1).
+  - Stamina limits attack, roll and block, which creates the risk / reward rhythm of the genre.
+
+5.2 Weapons
+  - Several weapon types (sword and others). Each weapon has its own two skills and its own
+    fatality (finishing move). Skills have cooldowns and use rage.
+  - Example skills: quake (ground slam), dash strike, flurry, fire shell (ranged).
+
+5.3 Enemies
+  - Small enemies: zombies, ghouls, hounds, skeletons, fiends, imps. They use real 3D bodies
+    (Quaternius models) animated by a shared rig.
+  - Ranged enemies fire projectiles that can also hurt civilians.
+  - Bosses and a titan: more health, trash talk (voice lines), unique death animation and music.
+  - Behaviour: approach, attack with a wind-up (readable telegraph), retreat / circle at low health.
+    The enemy count and how far enemies are active depend on the graphics level.
+
+5.4 Civilians (labyrinth)
+  - 80 health each; hidden until the hero reaches them; once rescued they FOLLOW the hero's trail.
+  - The player can command them to STAY or FOLLOW.
+  - Monsters attack them. If any civilian dies the quest fails and the labyrinth resets.
+
+5.5 Balancing choices
+  - Enemy damage and health scale with quest number; rewards (experience, items) grow with it.
+  - Cooldowns and rage cost keep skills strong but not spammable.
+  - The torch rule (no weapon while holding it) forces a decision during every fight.
+
+
+======================================================================
+6. GAME SYSTEMS
+======================================================================
+
+6.1 Combat and damage
+  - Hit detection by distance / arc around attacks; damage reduced by block; stamina on block.
+  - Execution: grabbing a weakened enemy triggers a weapon-dependent fatality (heart rip,
+    decapitation, uppercut, neck snap, slam, impale, shoot, stab, blast) with its own camera and
+    player animation and announcer voice.
+
+6.2 AI
+  - Simple state machines per enemy: idle -> chase -> attack wind-up -> attack -> recover.
+  - Civilians: hiding, follow, stay, escape, dead, gone.
+  - Monsters inside the labyrinth also target civilians.
+
+6.3 Objectives and progression
+  - 27+ quests with different objectives: kill camps, bosses, find hidden emblems, rescue the
+    princess, cross the labyrinth. Completing quests gives experience, level ups and items.
+  - Story ending: after the princess is rescued, a comic-style epilogue plays (panels rendered
+    with a comic shader: ink outline, posterised colour, halftone).
+
+6.4 UI states
+  - Title, play, pause, map, settings, quest banner, death / retry, epilogue.
+
+6.5 Audio
+  - Background music per situation (calm, combat, boss) plus ambience (rain, thunder, lurking sounds).
+  - Voices for the hero hurt sounds, monsters, bosses (trash talk), civilians and announcements.
+
+6.6 Pause, restart and save
+  - Pause menu with settings. Death or quest failure lets the player retry the quest.
+  - Progress is saved to a local savegame file (Continue on the title screen loads it).
+    New Game deletes the old save.
+
+
+======================================================================
+7. ART AND AUDIO DIRECTION
+======================================================================
+
+7.1 Style
+  - Dark, gritty, realistic fantasy (explicitly not cartoonish). Muted palette, cold moonlight,
+    fog, warm orange firelight and torchlight as the only strong colour.
+  - The comic epilogue is the deliberate exception: a graphic-novel look for storytelling.
+
+7.2 Materials and lighting
+  - Terrain3D with real ground textures; triplanar stone for labyrinth walls.
+  - Moonlight (directional light), fog, rain and lightning flashes; point lights for torches
+    and fires. In the labyrinth ambient light is almost removed so only torches light the maze.
+
+7.3 VFX
+  - Particles for fire, embers, hit sparks, blood, rain, ground impacts and skill effects.
+
+7.4 Sound approach
+  - Voice lines generated with the Windows speech engine and processed (pitch, low-pass,
+    reverb) to sound menacing but intelligible; WAV files for short clips, compressed music.
+
+7.5 Asset sources and credit plan (all free)
+  - Character models, hair, and outfits: Quaternius packs (CC0).
+  - Textures and terrain materials: CC0 sources (e.g. ambientCG / Poly Haven style libraries) and
+    the Terrain3D demo assets.
+  - Music and sound effects: free / CC0 packs downloaded for the project; licence files are kept
+    beside the assets (for example LICENSE_Quaternius.txt).
+  - Credits screen / documentation lists every pack with its author and licence.
+  - Models were decimated and textures shrunk with Blender scripts (tools/prep_*.py) for phones.
+
+
+======================================================================
+8. IMPLEMENTATION MAPPING
+======================================================================
+
+8.1 Feature -> script (res://scripts/)
+  Main game loop, combat, quests, camera ........ game.gd
+  Autoload: quality, FPS, device info, audio .... settings.gd
+  Autoload: music ............................... music.gd
+  Touch controls and buttons .................... touch_controls.gd
+  Walls, maze, chests, torches, collision ....... structures.gd
+  Fatalities / executions ....................... execution.gd
+  Rescued civilians ............................. civilians.gd
+  Labyrinth torch ............................... torch.gd
+  Character bodies and rig posing ............... models.gd
+  Trees (MultiMesh chunks, see-through) ......... forest.gd
+  Screen effects (fog, darkness, rain) .......... fx.gd
+  Voices and sounds ............................. vox.gd
+  Quest texts ................................... quests.gd
+  Title and help ................................ title.gd
+  Comic epilogue ................................ comic.gd, comic_art.gd, comic.gdshader
+
+8.2 Pseudocode - dynamic resolution (performance)
+  every 0.6 s:
+      fps = frames / time
+      if fps < 88% of target:  scale = max(0.62, scale - 0.08)
+      elif fps > 97% of target: scale = min(1.0, scale + 0.04)
+      apply render scale (rate-limited: 1.2 s after lowering, 3 s after raising)
+  if still slow at the smallest scale for ~8 s: lower the graphics level by one.
+
+8.3 Pseudocode - labyrinth quest
+  start quest 27:
+      flatten ground (a few hundred points per frame)
+      build walls -> chests -> torches (yielding between steps)
+      when finished: spawn civilians + monsters
+  each frame:
+      if a civilian is hit to zero health: quest failed -> reset maze after 3.6 s
+      if all rescued and all at the gate: quest complete
+
+8.4 State diagram (hero)
+  idle -> move / attack / roll / block / skill / execute / hurt -> idle; health 0 -> dead -> retry.
+  Torch: held (no weapon) <-> dropped (can fight).
+
+8.5 Changes from the original concept
+  - Fatalities and skills now depend on the weapon (originally one shared set).
+  - The labyrinth was made larger, darker, with civilians to protect (originally empty).
+  - Camera: trees fade instead of pushing the camera; walls rotate / push the camera.
+  - Maze generation moved to a step-by-step build and a spatial grid to avoid lag on phones.
+
+
+======================================================================
+9. TECHNICAL SPECIFICATIONS
+======================================================================
+
+  Engine ............ Godot 4.7.2 (stable), GDScript
+  Renderer .......... GL Compatibility (OpenGL ES 3.0), for wide phone support
+  Terrain ........... Terrain3D addon
+  Target platform ... Android, arm64-v8a only, signed release APK (no Gradle build)
+  Test device ....... Honor X9b (8 GB RAM); must also run on 4 GB phones
+  Package ........... app category: game; isGame = true (Android Game Mode aware)
+  Build settings .... export preset "Android Release", version 1.12.0 / code 23,
+                      output build/dark-souls-release.apk
+  Graphics levels ... 6 (VERY LOW to REALISTIC); default chosen by RAM on first run
+                      (<= 4.6 GB: level 1, <= 6.6 GB: level 2, else level 3)
+  Frame-rate cap .... 30 / 45 / 60 / 90 / 120 / unlimited (default 60); forced to 30 in
+                      Android Battery Game Mode, battery saver or when the phone is hot
+  Performance target. 60 fps on 8 GB phones, a stable 30+ fps on 4 GB phones
+  Performance tools . dynamic resolution, auto-lower graphics, light limit by level, MultiMesh
+                      forest, pooled characters, spatial grid for maze collision, async maze build
+  Device detection .. Android Game Mode (standard / performance / battery), thermal status,
+                      battery saver, screen refresh rate, GPU name - shown in Settings
+
+  Known limitations
+  - Not yet measured on a phone after the latest optimisation pass; real-device frame times
+    are the next thing to verify.
+  - Some figures are still built when first needed, which can cause a small hitch the first time.
+  - The Honor Game Space may need the game added manually to show it as a game.
+  - Voices are synthesised, not recorded by actors.
