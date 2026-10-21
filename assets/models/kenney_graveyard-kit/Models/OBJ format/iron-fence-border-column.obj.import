@@ -1,0 +1,25 @@
+[remap]
+
+importer="wavefront_obj"
+importer_version=1
+type="Mesh"
+uid="uid://jfo6jkqxvwgg"
+path="res://.godot/imported/iron-fence-border-column.obj-dbb2d312079883ec17cd90ed68defbb1.mesh"
+
+[deps]
+
+files=["res://.godot/imported/iron-fence-border-column.obj-dbb2d312079883ec17cd90ed68defbb1.mesh"]
+
+source_file="res://assets/models/kenney_graveyard-kit/Models/OBJ format/iron-fence-border-column.obj"
+dest_files=["res://.godot/imported/iron-fence-border-column.obj-dbb2d312079883ec17cd90ed68defbb1.mesh", "res://.godot/imported/iron-fence-border-column.obj-dbb2d312079883ec17cd90ed68defbb1.mesh"]
+
+[params]
+
+generate_tangents=true
+generate_lods=true
+generate_shadow_mesh=true
+generate_lightmap_uv2=false
+generate_lightmap_uv2_texel_size=0.2
+scale_mesh=Vector3(1, 1, 1)
+offset_mesh=Vector3(0, 0, 0)
+force_disable_mesh_compression=false
