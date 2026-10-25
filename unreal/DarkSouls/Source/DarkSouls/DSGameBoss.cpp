@@ -492,7 +492,7 @@ void ADSGame::BossStrikeUpdate(FDSEnemy& E, float Dt, float Dist, float Ang)
 			if (Rel.Size() > ArenaR - 2.8f)
 			{
 				const FVector2D N = (-Rel).GetSafeNormal();
-				E.Dash = E.Dash - 2.f * FVector2D::DotProduct(E.Dash, N) * N;   // bounce off the arena wall
+				E.Dash = E.Dash - N * (2.f * FVector2D::DotProduct(E.Dash, N));   // bounce off the arena wall
 				Shake = FMath::Max(Shake, 8.f);
 				Burst(E.Pos, 8, FLinearColor(0.6f, 0.54f, 0.44f), 8.f, 0.4f);
 			}

@@ -388,7 +388,7 @@ void ADSGame::ExecStart(FDSEnemyPtr E)
 		ExecPre = 1.0f;
 	}
 	ExecT = -ExecPre;
-	E->Exec = ExecT;
+	E->Exec = 0.f;   // >= 0 marks "being finished" (the enemy freezes); ExecT itself starts negative during the grab
 	E->St = EDSEState::Stagger;
 	PAct = EDSAct::Idle;
 	PStun = 0.f;
@@ -421,7 +421,7 @@ void ADSGame::ExecUpdate(float DtScaled)
 		if (ExecSlowLeft <= 0.f) UGameplayStatics::SetGlobalTimeDilation(this, 1.f);
 	}
 	ExecT += Dt;
-	E.Exec = ExecT;
+	E.Exec = FMath::Max(ExecT, 0.f);
 	PInv = 5.f;
 	E.Mv = 0.f;
 	E.Daze = FMath::Max(E.Daze, 0.2f);

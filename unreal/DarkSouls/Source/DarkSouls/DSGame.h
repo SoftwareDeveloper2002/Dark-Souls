@@ -270,7 +270,7 @@ private:
 	int32 QuestEnemyCount() const;
 	int32 AddCap(int32 Base) const { return FMath::Min(Base, 9); }
 	void Fire(const FVector2D& From, float Ang, float Dmg, float Spd, EDSProj Kind, float Homing = 0.f, float Height = 1.3f);
-	void AddZone(const FVector2D& Pos, float R, float Delay, float Dmg, bool bPlayer, bool bBoom = false, TWeakPtr<FDSEnemy> Fist = nullptr);
+	void AddZone(const FVector2D& Pos, float R, float Delay, float Dmg, bool bPlayer, bool bBoom = false, TWeakPtr<FDSEnemy> Fist = TWeakPtr<FDSEnemy>());
 	void UpdateZones(float Dt);
 	void UpdateProjs(float Dt);
 	void UpdateOrbs(float Dt);
