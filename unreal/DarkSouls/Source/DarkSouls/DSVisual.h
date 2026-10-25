@@ -9,6 +9,7 @@
 
 class UStaticMeshComponent;
 class UMaterialInstanceDynamic;
+class UInstancedStaticMeshComponent;
 
 UENUM()
 enum class EDSShape : uint8 { Cube, Sphere, Cylinder, Cone };
@@ -23,6 +24,10 @@ public:
 
 	/** Adds a primitive. Scale is in metres (1 = 100 cm). Returns the part's index. */
 	int32 AddPart(EDSShape Shape, const FVector& LocalMetres, const FVector& ScaleMetres, const FLinearColor& Color);
+
+	/** One draw call for many copies of a primitive (walls, trees). Add copies with AddInstance. */
+	UInstancedStaticMeshComponent* AddInstanced(EDSShape Shape, const FLinearColor& Color);
+	static void AddInstance(UInstancedStaticMeshComponent* C, const FVector& WorldCm, const FVector& ScaleMetres, float YawRad);
 
 	UStaticMeshComponent* GetPart(int32 I) const { return Parts.IsValidIndex(I) ? Parts[I] : nullptr; }
 	void SetPartColor(int32 I, const FLinearColor& C);

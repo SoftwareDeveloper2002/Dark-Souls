@@ -70,6 +70,7 @@ void ADSGame::EndPlay(const EEndPlayReason::Type Reason)
 
 float ADSGame::Ground(const FVector2D& P)
 {
+	if (OnBridge(P)) return Bridge.Base;
 	const int64 Key = ((int64)FMath::RoundToInt(P.X * 2.0) << 32) ^ (int64)(uint32)FMath::RoundToInt(P.Y * 2.0);
 	if (const float* Cached = HeightCache.Find(Key)) return *Cached;
 	UWorld* W = GetWorld();
@@ -110,6 +111,7 @@ FVector2D ADSGame::Slide(const FVector2D& Pos, const FVector2D& Delta)
 {
 	if (Delta.SizeSquared() < 1e-10) return Pos;
 	const float H0 = Ground(Pos);
+	const bool bStuck = WallHit(Pos, 0.5f);
 	const FVector2D Tries[3] = { Delta, FVector2D(Delta.X, 0.0), FVector2D(0.0, Delta.Y) };
 	for (const FVector2D& D : Tries)
 	{
@@ -117,6 +119,7 @@ FVector2D ADSGame::Slide(const FVector2D& Pos, const FVector2D& Delta)
 		if (Dl < 1e-6f) continue;
 		const FVector2D Look = Pos + D / Dl * FMath::Max(Dl, 0.6f);
 		if (!WalkOk(Look)) continue;
+		if (!bStuck && WallHit(Look, 0.5f)) continue;
 		if (FMath::Abs(Ground(Look) - H0) / FVector2D::Distance(Pos, Look) > 0.85f) continue;
 		return Pos + D;
 	}
@@ -125,6 +128,7 @@ FVector2D ADSGame::Slide(const FVector2D& Pos, const FVector2D& Delta)
 
 FVector2D ADSGame::Contain(const FVector2D& P) const
 {
+	if (bBridgeActive) return BridgeClamp(P);
 	if (bArenaActive)
 	{
 		const FVector2D V = P - Site;
@@ -213,6 +217,11 @@ void ADSGame::BuildWorld()
 	}
 	BuildPlayerFigure();
 	ApplyChapter(0);
+	BuildTunnel();
+	EmblemsInit();
+	for (int32 q = 1; q <= 40; q++) Clearings.Add(DSData::Site(q));
+	Clearings.Add(DSData::StartPos());
+	Music(TEXT("title"));
 }
 
 void ADSGame::ApplyChapter(int32 Ch)
@@ -223,7 +232,7 @@ void ADSGame::ApplyChapter(int32 Ch)
 	if (Moon)
 	{
 		Moon->GetLightComponent()->SetLightColor(C.Moon);
-		Moon->GetLightComponent()->SetIntensity(C.MoonE * 3.f);
+		MoonBase = C.MoonE;
 	}
 	if (Fog) Fog->GetComponent()->SetFogInscatteringColor(C.Fog * 6.f);
 	if (Sky)
@@ -245,31 +254,74 @@ void ADSGame::UpdateCamera(float Dt)
 {
 	FVector Target = P3(PPos);
 	float ZoomT = 1.f;
-	if (State == EDSState::Title)
+	float PitchK = 1.f;
+	float YawT = 0.f;
+	if (State == EDSState::Title || State == EDSState::Comic)
 	{
 		const FVector2D S = DSData::StartPos();
 		Target = P3(S + FVector2D(FMath::Cos(Time * 0.15f), FMath::Sin(Time * 0.15f)) * 6.0);
 		ZoomT = 1.4f;
 	}
+	else if (bExecActive && ExecTarget.IsValid())
+	{
+		Target = P3((PPos + ExecTarget->Pos) * 0.5f, ExecTarget->bBoss ? 2.f : 1.1f);
+		ZoomT = ExecTarget->bBoss ? 0.85f : 0.34f;
+		PitchK = CamPitchK;
+		YawT = CamYaw;
+	}
 	else
 	{
 		for (const FDSEnemyPtr& E : Enemies)
-			if (E->Type == EDSEnemy::Cyborg && !E->bDead) { Target = FMath::Lerp(Target, P3(E->Pos), 0.35); ZoomT = 1.5f; }
+			if (E->Type == EDSEnemy::Cyborg && !E->bDead) { Target = FMath::Lerp(Target, P3(E->Pos), 0.4); ZoomT = bBridgeActive ? 1.55f : 1.5f; if (bBridgeActive) YawT = FMath::Atan2(-Bridge.D.X, -Bridge.D.Y); }
 	}
-	Cam_Zoom = FMath::Lerp(Cam_Zoom, ZoomT, 1.f - FMath::Exp(-2.5f * Dt));
-	CamFocus = FMath::Lerp(CamFocus, Target, 1.0 - FMath::Exp(-9.0 * Dt));
-	const FVector Off = FVector(0.0, 12.4, 17.2) * 100.0 * Cam_Zoom;   // CAM_OFFSET, ~54 degree pitch looking "north"
+	const bool bCine = bExecActive;
+	Cam_Zoom = FMath::Lerp(Cam_Zoom, ZoomT, 1.f - FMath::Exp(-(bCine ? 7.f : 2.5f) * Dt));
+	const bool bInMazeView = Maze.bBuilt && InMaze(PPos) && State == EDSState::Play && !bCine;
+	MazeK = FMath::FInterpConstantTo(MazeK, bInMazeView ? 1.f : 0.f, Dt, 1.f / 0.8f);
+	if (MazeK < 0.5f && !bCine)
+		CamYaw = FMath::Lerp(CamYaw, YawT, 1.f - FMath::Exp(-3.f * Dt));
+	CamFocus = FMath::Lerp(CamFocus, Target, 1.0 - FMath::Exp(-(bCine ? 12.0 : 9.0) * Dt));
 	FVector Sh = FVector::ZeroVector;
 	if (Shake > 0.f) Sh = FVector(FMath::FRandRange(-1, 1), FMath::FRandRange(-1, 1), FMath::FRandRange(-1, 1)) * Shake * 1.2f;
-	const FVector Pos = CamFocus + Off + Sh;
-	Camera->SetActorLocationAndRotation(Pos, FRotationMatrix::MakeFromX(CamFocus - Pos).Rotator());
+	// CAM_OFFSET rotated about the vertical axis (game plane x, y; up is z)
+	const float Yaw = CamYaw;
+	const FVector Off(12.4 * FMath::Sin(Yaw) * 100.0 * Cam_Zoom, 12.4 * FMath::Cos(Yaw) * 100.0 * Cam_Zoom, 17.2 * PitchK * 100.0 * Cam_Zoom);
+	FVector Pos = CamFocus + Off + Sh;
+	FVector Look = CamFocus + Sh;
+	float Fov = 55.f;
+	if (MazeK > 0.001f)
+	{
+		// over-the-shoulder third person: low behind the hero, the towering walls rising on both sides
+		const float E = FMath::SmoothStep(0.f, 1.f, MazeK);
+		const FVector2D Fwd(-FMath::Sin(Yaw), -FMath::Cos(Yaw));
+		const FVector2D Right(-Fwd.Y, Fwd.X);
+		const FVector Head = P3(PPos, 1.6f);
+		const FVector Want = Head - FVector(Fwd.X, Fwd.Y, 0) * 420.0 + FVector(Right.X, Right.Y, 0) * 55.0 + FVector(0, 0, 55);
+		FVector Dirn = Want - Head;
+		const float Dist = Dirn.Size();
+		Dirn /= Dist;
+		float Reach = 0.f;
+		while (Reach < Dist)
+		{
+			const FVector Q = Head + Dirn * Reach;
+			if (WallOnly(FVector2D(Q.X, Q.Y) / 100.0, 0.55f)) break;
+			Reach += 25.f;
+		}
+		const FVector TpPos = Head + Dirn * FMath::Max(Reach - 35.f, 90.f);
+		const FVector TpLook = Head + FVector(Fwd.X, Fwd.Y, 0) * 500.0 + FVector(Right.X, Right.Y, 0) * 45.0 + FVector(0, 0, -30);
+		Pos = FMath::Lerp(Pos, TpPos + Sh, E);
+		Look = FMath::Lerp(Look, TpLook + Sh, E);
+		Fov = FMath::Lerp(55.f, 78.f, E);
+	}
+	Camera->GetCameraComponent()->SetFieldOfView(Fov);
+	Camera->SetActorLocationAndRotation(Pos, FRotationMatrix::MakeFromX(Look - Pos).Rotator());
 }
 
 // ================================================================== tick
 
 bool ADSGame::IsFrozen() const
 {
-	return bPaused || bDialogActive || bShopOpen;
+	return bPaused || bDialogActive || bShopOpen || bMapOpen || State == EDSState::Comic;
 }
 
 void ADSGame::Tick(float Dt)
@@ -277,22 +329,33 @@ void ADSGame::Tick(float Dt)
 	Super::Tick(Dt);
 	Dt = FMath::Min(Dt, 0.05f);
 	Buttons.Reset();                       // the HUD re-registers them while drawing this frame (see ADSHUD::DrawHUD)
-
+	Time += Dt;
+	MapBuildStep();
+	WeatherUpdate(Dt);
 	if (State == EDSState::Title)
 	{
-		Time += Dt;
+		UpdateCamera(Dt);
+		UpdateParticles(Dt);
+		return;
+	}
+	if (State == EDSState::Comic)
+	{
+		ComicT += Dt;
+		if (bCredits) CreditsT += Dt;
 		UpdateCamera(Dt);
 		return;
 	}
-	Time += Dt;
 	for (FDSFloater& F : Floaters) F.Age += Dt;
 	Floaters.RemoveAll([](const FDSFloater& F) { return F.Age >= F.Life; });
 	if (!bPaused) BannerT -= Dt;
+	for (FDSSpeech& S : Speeches) S.T += Dt;
+	Speeches.RemoveAll([](const FDSSpeech& S) { return S.T > S.Life || !S.Who.IsValid(); });
 
 	if (State == EDSState::Play)
 	{
 		if (!IsFrozen()) TickGame(Dt);
-		if (bQDone && !IsFrozenExceptShop()) PostQuest(Dt);
+		if (bQDone && !(bPaused || bDialogActive)) PostQuest(Dt);
+		if (!bPaused) EmblemsUpdate(Dt);
 	}
 	else
 	{
@@ -305,6 +368,8 @@ void ADSGame::Tick(float Dt)
 		UpdateParticles(Dt);
 		UpdateRings(Dt);
 		UpdateOrbs(Dt);
+		UpdateChests(Dt);
+		UpdateForest(PPos);
 	}
 	SyncVisuals(Dt);
 	UpdateCamera(Dt);
@@ -318,6 +383,26 @@ void ADSGame::TickGame(float Dt)
 	BufEstus = FMath::Max(0.f, BufEstus - Dt);
 	BufSk1 = FMath::Max(0.f, BufSk1 - Dt);
 	BufSk2 = FMath::Max(0.f, BufSk2 - Dt);
+	TunnelBannerCheck();
+	// the labyrinth: torch, civilians, failure and retry
+	TorchUpdate(Dt);
+	CivUpdate(Dt);
+	if (MazeFailT >= 0.f)
+	{
+		MazeFailT += Dt;
+		if (MazeFailT > 3.6f)
+		{
+			MazeFailT = -1.f;
+			ClearField();
+			bCampSpawned = false;
+			SpawnCamp();
+			PPos = Maze.Entrance;
+			CamFocus = P3(PPos);
+			PHp = PMaxHp;
+			PSt = PMaxSt;
+			ShowBanner(TEXT("TRY AGAIN"), 2.2f, TEXT("Keep every civilian alive"));
+		}
+	}
 	UpdatePlayer(Dt);
 }
 
@@ -483,6 +568,8 @@ void ADSGame::BuildPlayerFigure()
 	PlayerFig->AddPart(EDSShape::Cube, FVector(0.5, 0.45, 1.2), FVector(0.1, 0.1, 1.2), FLinearColor(0.8f, 0.82f, 0.9f)); // 2 weapon
 	PlayerFig->AddPart(EDSShape::Cube, FVector(0.4, -0.5, 1.1), FVector(0.12, 0.6, 0.8), FLinearColor(0.35f, 0.15f, 0.1f)); // 3 shield
 	PlayerFig->AddPart(EDSShape::Sphere, FVector(0.25, 0, 1.78), FVector(0.14, 0.3, 0.1), FLinearColor(0.9f, 0.4f, 0.1f)); // 4 visor glow
+	PlayerFig->AddPart(EDSShape::Cylinder, FVector(0.6, 0.35, 1.1), FVector(0.09, 0.09, 1.0), FLinearColor(0.23f, 0.15f, 0.09f));   // 5 torch stick
+	PlayerFig->AddPart(EDSShape::Cone, FVector(0.6, 0.35, 1.75), FVector(0.3, 0.3, 0.5), FLinearColor(1.f, 0.65f, 0.2f) * 5.f);         // 6 flame
 	PlayerFig->SetActorHiddenInGame(true);
 }
 
@@ -563,7 +650,9 @@ void ADSGame::SyncPlayer(float Dt)
 	UStaticMeshComponent* Shield = PlayerFig->GetPart(3);
 	if (Blade && Shield)
 	{
-		Blade->SetVisibility(bHasWeapon);
+		Blade->SetVisibility(bHasWeapon && !bTorchHeld);
+		if (UStaticMeshComponent* Ts = PlayerFig->GetPart(5)) Ts->SetVisibility(bTorchHeld);
+		if (UStaticMeshComponent* Tf = PlayerFig->GetPart(6)) Tf->SetVisibility(bTorchHeld);
 		Blade->SetRelativeScale3D(BladeScale);
 		const float K = (PAct == EDSAct::Attack && PAtk.Time > 0.f) ? FMath::Clamp(PActT / PAtk.Time, 0.f, 1.f) : 0.f;
 		FVector Loc(0.55, 0.45, 1.25);

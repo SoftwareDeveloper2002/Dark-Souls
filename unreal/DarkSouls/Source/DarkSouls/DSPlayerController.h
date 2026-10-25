@@ -35,9 +35,14 @@ private:
 	void KeySwap();
 	void KeyPause();
 	void KeyTap();
+	void KeyTorch();
+	void KeyCommand();
+	void KeyMap();
 
 	TWeakObjectPtr<ADSGame> Game;
 	int32 StickFinger = -1;
+	int32 LookFinger = -1, MapFinger = -1;
+	FVector2D LookLast = FVector2D::ZeroVector, MapLast = FVector2D::ZeroVector;
 	TMap<int32, FString> Held;       // finger -> button id
 	bool bBlockTouch = false;
 	bool bViewSet = false;

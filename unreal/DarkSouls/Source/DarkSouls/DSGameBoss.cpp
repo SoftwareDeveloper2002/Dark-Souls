@@ -182,6 +182,9 @@ void ADSGame::BossPhaseCheck(FDSEnemy& E)
 	E.Speed *= 1.12f;
 	Shake = 14.f;
 	ShowBanner(FString::Printf(TEXT("%s ENRAGES"), DSData::Enemy(E.Type).Name), 2.4f);
+	BossSay(E, 7, true);
+	Sfx(TEXT("roar"), -2.f, 0.9f);
+	FxIntensity += 0.5f;
 	Burst(E.Pos, 24, FLinearColor(1.f, 0.35f, 0.16f), 12.f, 1.f);
 	Strike(E.Pos);
 	switch (E.Type)

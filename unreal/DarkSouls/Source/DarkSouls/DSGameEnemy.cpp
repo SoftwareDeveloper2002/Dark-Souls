@@ -42,7 +42,7 @@ FVector2D ADSGame::SpawnNear(const FVector2D& C, float RMin, float RMax)
 	for (int32 i = 0; i < 16; i++)
 	{
 		const FVector2D P = C + FromAngle(FMath::FRand() * 2.f * PI) * FMath::FRandRange(RMin, RMax);
-		if (WalkOk(P) && FMath::Abs(Ground(P) - Hc) < 5.f && FVector2D::Distance(P, PPos) > 9.f) return P;
+		if (WalkOk(P) && FMath::Abs(Ground(P) - Hc) < 5.f && FVector2D::Distance(P, PPos) > 9.f && !WallHit(P, 0.8f)) return P;
 	}
 	return C + FVector2D(RMin, 0.f);
 }
@@ -120,6 +120,7 @@ void ADSGame::UpdateEnemy(FDSEnemy& E, float Dt)
 	}
 	MoveE(E, E.Kb * Dt);
 	E.Kb *= FMath::Pow(0.02f, Dt);
+	if (E.Exec >= 0.f) { E.Mv = 0.f; return; }
 	if (E.Daze > 0.f)
 	{
 		// dazed: reeling, glowing, defenceless
@@ -287,6 +288,7 @@ void ADSGame::HurtEnemy(FDSEnemyPtr E, float Dmg, float Ang, bool bBlocked, floa
 	}
 	E->Hp -= Dmg;
 	E->Flash = 0.15f;
+	Sfx(TEXT("hit"), bBlocked ? -4.f : -2.f, bBlocked ? 1.5f : FMath::FRandRange(0.9f, 1.15f));
 	E->Mode = EDSMode::Alert;
 	const bool bBig = E->bBoss || E->Type == EDSEnemy::Brute;
 	E->Kb = FromAngle(Ang) * (E->bBoss ? 2.f : (bBig ? 3.f : (bBlocked ? 4.f : 12.f))) * KbMul;
@@ -377,6 +379,8 @@ void ADSGame::KillEnemy(FDSEnemyPtr E, bool bReward)
 	Burst(E->Pos, E->bBoss ? 24 : 14, FLinearColor(0.95f, 0.76f, 0.35f), 8.f, 1.f);
 	if (E->bBoss)
 	{
+		BossSay(*E, 10, true);
+		Sfx(TEXT("roar"), -4.f, 0.6f);
 		BossFreeNodes(*E);
 		// a dead Titan takes its fists with it
 		for (const FDSEnemyPtr& O : TArray<FDSEnemyPtr>(Enemies))
@@ -437,6 +441,7 @@ void ADSGame::UpdateProjs(float Dt)
 			P.Vel = FromAngle(Cur + Turn) * P.Vel.Size();
 		}
 		P.Pos += P.Vel * Dt;
+		if (WallOnly(P.Pos, 0.1f)) { P.Life = 0.f; continue; }
 		if (P.Team == FDSProjectile::ETeam::Enemy)
 		{
 			if (FVector2D::Distance(P.Pos, PPos) < PR + 0.5f && PInv <= 0.f && State == EDSState::Play)

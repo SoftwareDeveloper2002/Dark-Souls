@@ -166,6 +166,10 @@ namespace
 		{ TEXT("ELARA"), TEXT("I knew you would come. Thank you, brave knight. The long night is over.") },
 		{ TEXT(""), TEXT("Dawn breaks over Eldoria. You have saved the princess.") } };
 
+	const FDSLine GMazeText[] = {
+		{ TEXT(""), TEXT("The road vanishes into a labyrinth of towering old stone, black as a grave. Villagers fled in here when the monsters came, and now they cower in its dead ends. Find them all and lead them across the labyrinth to the far gate - and keep every one of them alive. If a single civilian dies, the labyrinth resets.") },
+		{ TEXT(""), TEXT("It is pitch dark. Your torch is your only light - and while you carry it you cannot raise a weapon. Drop it on the ground to fight, then pick it up again. Tap COMMAND to tell the rescued to follow you or stay put. Somewhere inside, the Ashen Order hid a gun, forged for the last war.") } };
+	const FDSLine GTunnelText[] = { { TEXT(""), TEXT("A great tunnel yawns ahead, the only way down into the Sunken Crypt. Torches gutter in the dark. Something shuffles inside.") } };
 	template <typename T, int32 N> TArrayView<const T> View(const T (&A)[N]) { return TArrayView<const T>(A, N); }
 
 	TArray<int32> GSites;   // route index of each quest site
@@ -227,6 +231,9 @@ namespace DSData
 		switch (N) { case 10: return View(GBossDefeat10); case 20: return View(GBossDefeat20); case 30: return View(GBossDefeat30); default: return View(GBossDefeat40); }
 	}
 
+	TArrayView<const FDSLine> MazeText() { return View(GMazeText); }
+	TArrayView<const FDSLine> TunnelText() { return View(GTunnelText); }
+
 	FDSQuest MakeQuest(int32 N)
 	{
 		N = FMath::Clamp(N, 1, MaxQuest);
@@ -248,10 +255,9 @@ namespace DSData
 		}
 		else if (N == 27)
 		{
-			// The Godot game builds a labyrinth here (torch, civilians, treasure). That sub-game is not ported yet: it plays as a survival fight.
-			Q.Kind = EDSQuestKind::Survive;
-			Q.Target = 28 + N;
-			Q.Text = TEXT("Survive the onslaught");
+			Q.Kind = EDSQuestKind::Maze;
+			Q.Text = TEXT("Find the treasure in the labyrinth");
+			Q.Target = 1;
 		}
 		else if (Q.Idx == 5 || Q.Idx == 9)
 		{
@@ -303,4 +309,58 @@ namespace DSData
 		}
 		return Out;
 	}
+}
+
+namespace
+{
+	const FDSComicPanel GComic0[] = {
+		{ TEXT("fall"), 0.f, 0.f, 1.f, 0.52f, TEXT("The Dark Citadel fell silent. For the first time in a hundred nights, the storm broke."), TEXT(""), TEXT(""), TEXT("KRAA-BOOOM!") },
+		{ TEXT("kneel"), 0.f, 0.53f, 0.37f, 0.47f, TEXT("The Ashen Knight had lost his name, his order, his king. Only a vow remained.") },
+		{ TEXT("face"), 0.38f, 0.53f, 0.27f, 0.47f, TEXT(""), TEXT(""), TEXT("...You came.") },
+		{ TEXT("two"), 0.66f, 0.53f, 0.34f, 0.47f, TEXT("The knight said nothing. Knights of the Order seldom did."), TEXT(""), TEXT("Through fire and ash... for me?") },
+	};
+	const FDSComicPanel GComic1[] = {
+		{ TEXT("crown"), 0.f, 0.f, 0.56f, 0.64f, TEXT("But as Elara lifted the Dark Lord's fallen crown, the embers whispered..."), TEXT(""), TEXT("EVERY FLAME MUST BE FED.") },
+		{ TEXT("cycle"), 0.57f, 0.f, 0.43f, 0.31f, TEXT(""), TEXT(""), TEXT("Malakar was a warden once. Like you.") },
+		{ TEXT("look"), 0.57f, 0.32f, 0.43f, 0.32f, TEXT(""), TEXT(""), TEXT("The Throne burns its guardians. And it will choose again.") },
+		{ TEXT("vow"), 0.f, 0.65f, 1.f, 0.35f, TEXT("The knight did not look away."), TEXT(""), TEXT("Then we end it. Together.") },
+	};
+	const FDSComicPanel GComic2[] = {
+		{ TEXT("walk"), 0.f, 0.f, 1.f, 0.42f, TEXT("They took the ash road home, and the forest, once full of hungry eyes, was quiet.") },
+		{ TEXT("gate"), 0.f, 0.43f, 0.56f, 0.57f, TEXT("Eldoria wept, and cheered, and wept again."), TEXT(""), TEXT(""), TEXT("HUZZAH!") },
+		{ TEXT("coronation"), 0.57f, 0.43f, 0.43f, 0.57f, TEXT("The kingdom had its protector at last."), TEXT(""), TEXT("Arise, Warden of Eldoria.") },
+	};
+	const FDSComicPanel GComic3[] = {
+		{ TEXT("ember"), 0.f, 0.f, 1.f, 1.f, TEXT("But embers do not die."), TEXT("They wait."), TEXT(""), TEXT("THE END?") },
+	};
+	const FDSCreditLine GCredits[] = {
+		{ TEXT("THE ASH ROAD"), 44, true }, { TEXT("A knight, a princess, and a very long night."), 18, false }, { TEXT(""), 18, false },
+		{ TEXT("MADE WITH FREE ASSETS"), 24, true }, { TEXT(""), 10, false },
+		{ TEXT("Characters, wolf, imp and monsters"), 16, true },
+		{ TEXT("Quaternius - Universal Base Characters, Bestiary, Animated Animals (CC0)"), 15, false }, { TEXT(""), 10, false },
+		{ TEXT("Weapons, shields, props, trees and textures"), 16, true },
+		{ TEXT("Poly Haven artists (CC0)   -   Kenney (CC0)   -   KayKit (CC0)"), 15, false }, { TEXT(""), 10, false },
+		{ TEXT("Voices, monsters and ambience"), 16, true },
+		{ TEXT("EZduzziteh, HaelDB, rubberduck, Darsycho, Wolfgang_, Ecrivain, SketchMan3 (CC0)"), 15, false }, { TEXT(""), 10, false },
+		{ TEXT("The anatomical heart"), 16, true }, { TEXT("Scribe, OpenGameArt (CC0)"), 15, false }, { TEXT(""), 10, false },
+		{ TEXT("Terrain"), 16, true }, { TEXT("Terrain3D by Tokisan Games"), 15, false }, { TEXT(""), 10, false },
+		{ TEXT("Ported to Unreal Engine"), 16, true }, { TEXT(""), 24, false },
+		{ TEXT("THANK YOU FOR PLAYING"), 30, true }, { TEXT(""), 18, false }, { TEXT("tap to return"), 14, false },
+	};
+}
+
+namespace DSData
+{
+	int32 ComicPageCount() { return 4; }
+	FDSComicPage ComicPage(int32 I)
+	{
+		switch (I)
+		{
+		case 0: return { TEXT("PAGE ONE"), TEXT("THE FALL OF THE CITADEL"), TArrayView<const FDSComicPanel>(GComic0, UE_ARRAY_COUNT(GComic0)) };
+		case 1: return { TEXT("PAGE TWO"), TEXT("THE ASHEN THRONE"), TArrayView<const FDSComicPanel>(GComic1, UE_ARRAY_COUNT(GComic1)) };
+		case 2: return { TEXT("PAGE THREE"), TEXT("DAWN OVER ELDORIA"), TArrayView<const FDSComicPanel>(GComic2, UE_ARRAY_COUNT(GComic2)) };
+		default: return { TEXT(""), TEXT(""), TArrayView<const FDSComicPanel>(GComic3, UE_ARRAY_COUNT(GComic3)) };
+		}
+	}
+	TArrayView<const FDSCreditLine> Credits() { return TArrayView<const FDSCreditLine>(GCredits, UE_ARRAY_COUNT(GCredits)); }
 }

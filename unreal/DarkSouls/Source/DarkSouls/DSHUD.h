@@ -29,6 +29,13 @@ private:
 	void DrawShop();
 	void DrawPause();
 	void DrawEnd();
+	void DrawMap();
+	void DrawMinimap();
+	void DrawComic();
+	void DrawCredits();
+	void DrawSpeeches();
+	void DrawCivBars();
+	float Wrap(const FString& Text, float X, float Y, float W, float Scale, const FLinearColor& C);   // returns the y below the last line
 	void ShopRow(float X, float& Y, float W, const FString& Title, const FString& Level, const FString& Effect, const FString& Btn, bool bEnabled, const FString& Id);
 
 	ADSGame* G = nullptr;

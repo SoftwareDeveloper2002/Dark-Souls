@@ -72,6 +72,18 @@ struct FDSBossReward { int32 Souls; const TCHAR* Key; int32 Weapon; int32 Armor;
 
 struct FDSLine { const TCHAR* Who; const TCHAR* Text; };
 
+struct FDSComicPanel
+{
+	const TCHAR* Scene;
+	float X, Y, W, H;                  // fractions of the page
+	const TCHAR* Cap = TEXT("");       // caption box
+	const TCHAR* Cap2 = TEXT("");
+	const TCHAR* Bubble = TEXT("");    // speech bubble
+	const TCHAR* Sfx = TEXT("");       // sound-effect lettering
+};
+struct FDSComicPage { const TCHAR* Num; const TCHAR* Title; TArrayView<const FDSComicPanel> Panels; };
+struct FDSCreditLine { const TCHAR* Text; int32 Size; bool bBold; };
+
 struct FDSQuest
 {
 	int32 N = 1, Ch = 0, Idx = 1;
@@ -101,6 +113,11 @@ namespace DSData
 	TArrayView<const FDSLine> ChapterStart(int32 Ch);
 	TArrayView<const FDSLine> BossIntro(int32 QuestN);
 	TArrayView<const FDSLine> BossDefeat(int32 QuestN);
+	TArrayView<const FDSLine> MazeText();
+	TArrayView<const FDSLine> TunnelText();
+	int32 ComicPageCount();
+	FDSComicPage ComicPage(int32 I);
+	TArrayView<const FDSCreditLine> Credits();
 	FDSQuest MakeQuest(int32 N);
 
 	constexpr int32 MaxQuest = 40;

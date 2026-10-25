@@ -53,7 +53,7 @@ bool ADSGame::SkillReady(int32 Slot) const
 {
 	const FDSSkillDef& D = DSData::Skill(Equipped, Slot);
 	const int32 W = (int32)Equipped;
-	if (!Skills[W][Slot].bUnlocked || Cds[W][Slot] > 0.f || PSt < D.St) return false;
+	if (bTorchHeld || !Skills[W][Slot].bUnlocked || Cds[W][Slot] > 0.f || PSt < D.St) return false;
 	return D.Ammo == 0 || bUnlimitedAmmo || Ammo >= D.Ammo;
 }
 
@@ -87,6 +87,7 @@ void ADSGame::EquipArmor(EDSArmor A)
 
 void ADSGame::UpdatePlayer(float Dt)
 {
+	if (bExecActive) { ExecUpdate(Dt); return; }
 	for (int32 W = 0; W < 4; W++)
 		for (int32 S = 0; S < 2; S++)
 			Cds[W][S] = FMath::Max(0.f, Cds[W][S] - Dt);
@@ -106,11 +107,15 @@ void ADSGame::UpdatePlayer(float Dt)
 	// --- input ---
 	FVector2D Iv = MoveInput;
 	if (Iv.Size() > 1.0) Iv = Iv.GetSafeNormal();
+	// third person: the stick moves the hero relative to the camera; the hero always faces where the camera looks
+	Iv = Iv.GetRotated(-FMath::RadiansToDegrees(CamYaw));
 	const float Il = Iv.Size();
 	const bool bWantBlock = bBlockHeld;
 
 	const bool bNearSword = bSwordOnGround && FVector2D::Distance(PPos, SwordPos) < 2.6f;
-	const bool bNearChest = ChestActor.IsValid() && ChestT < 0.f && FVector2D::Distance(PPos, ChestPos) < 2.6f;
+	const int32 ChestI = ChestNear(PPos, 2.6f);
+	const int32 CivI = Q.Kind == EDSQuestKind::Maze ? CivNear(PPos, 2.8f) : -1;
+	const bool bNearChest = ChestI >= 0;
 	bChestPrompt = bNearChest;
 
 	// --- player ---
@@ -167,10 +172,9 @@ void ADSGame::UpdatePlayer(float Dt)
 					ShowBanner(TEXT("ASHEN LONGSWORD"), 2.f, TEXT("Left stick moves, ATTACK strikes, ROLL dodges"));
 				}
 			}
-			else if (bNearChest)
-			{
-				ChestT = 0.f;   // PostQuest animates the lid and hands out the treasure
-			}
+			else if (bNearChest) OpenMazeChest(ChestI);
+			else if (CivI >= 0) CivRescue(CivI);
+			else if (ExecFind().IsValid()) ExecStart(ExecFind());
 			else
 			{
 				TryAttack(Iv, Il);
@@ -187,11 +191,11 @@ void ADSGame::UpdatePlayer(float Dt)
 		{
 		case EDSAct::Idle:
 			Spd = Sp; Mv = Iv;
-			if (Il > 0.1f) PFace = AngleOf(Iv);
+			if (Il > 0.1f && !IsTp()) PFace = AngleOf(Iv);
 			break;
 		case EDSAct::Block:
 			Spd = 4.f * MoveMult(); Mv = Iv;
-			if (Il > 0.1f) PFace = AngleOf(Iv);
+			if (Il > 0.1f && !IsTp()) PFace = AngleOf(Iv);
 			break;
 		case EDSAct::Shoot:
 			PActT += Dt; Spd = 4.5f; Mv = Iv;
@@ -306,12 +310,16 @@ void ADSGame::UpdatePlayer(float Dt)
 				PHp = FMath::Min(PMaxHp, PHp + Heal);
 				Burst(PPos, 12, FLinearColor(1.f, 0.7f, 0.28f), 5.f, 1.f);
 				Float(P3(PPos, 2.4f), FString::Printf(TEXT("+%d"), (int32)Heal), FLinearColor(1.f, 0.7f, 0.28f));
+				Sfx(TEXT("potion"), -6.f);
 				PAct = EDSAct::Idle;
 			}
 			break;
 		default: break;
 		}
 	}
+	if (IsTp() && (PAct == EDSAct::Idle || PAct == EDSAct::Block || PAct == EDSAct::Shoot || PAct == EDSAct::Drink || PAct == EDSAct::Fan ||
+		PAct == EDSAct::Blast || PAct == EDSAct::Flurry || PAct == EDSAct::Quake || PAct == EDSAct::Dash))
+		PFace = FMath::Atan2(-FMath::Cos(CamYaw), -FMath::Sin(CamYaw));
 	const FVector2D Before = PPos;
 	PPos = Contain(Slide(PPos, Mv * Spd * Dt));
 	const float Moved = FVector2D::Distance(PPos, Before) / FMath::Max(Dt, 0.0001f);
@@ -319,7 +327,10 @@ void ADSGame::UpdatePlayer(float Dt)
 
 	// --- enemies ---
 	for (FDSEnemyPtr E : TArray<FDSEnemyPtr>(Enemies))
+	{
+		if (E->bBoss && !E->bDead && E->Mode == EDSMode::Alert && E->Exec < 0.f) BossTalkUpdate(*E, Dt);
 		UpdateEnemy(*E, Dt);
+	}
 	for (const FDSEnemyPtr& E : Enemies)
 	{
 		if (E->bDead || E->bStatic || (E->Mode == EDSMode::Idle && !E->bForce)) continue;
@@ -348,6 +359,11 @@ void ADSGame::UpdatePlayer(float Dt)
 
 void ADSGame::TryAttack(const FVector2D& Iv, float Il)
 {
+	if (bTorchHeld)
+	{
+		Float(P3(PPos, 2.4f), TEXT("DROP THE TORCH FIRST"), FLinearColor(1.f, 0.69f, 0.31f));
+		return;
+	}
 	const FDSWeaponDef& W = DSData::Weapon(Equipped);
 	if (W.Style == EDSStyle::Shoot)
 	{
@@ -365,13 +381,15 @@ void ADSGame::TryAttack(const FVector2D& Iv, float Il)
 			if (E->bDead || (E->Mode == EDSMode::Idle && !E->bForce)) continue;
 			const float D = FVector2D::Distance(PPos, E->Pos);
 			if (D > W.Range || E->Type == EDSEnemy::Fist) continue;
-			const float Away = FMath::Abs(AngleDiff(AngleOf(E->Pos - PPos), Il > 0.1f ? AngleOf(Iv) : PFace));
+			const float Away = FMath::Abs(AngleDiff(AngleOf(E->Pos - PPos), (Il > 0.1f && !IsTp()) ? AngleOf(Iv) : PFace));
+			if (IsTp() && Away > 1.f) continue;
 			const float Score = D + Away * 6.f;
 			if (Score < Bd) { Bd = Score; Best = E; }
 		}
 		if (Best.IsValid()) PFace = AngleOf(Best->Pos - PPos);
-		else if (Il > 0.1f) PFace = AngleOf(Iv);
+		else if (Il > 0.1f && !IsTp()) PFace = AngleOf(Iv);
 		if (!bUnlimitedAmmo) Ammo--;
+		Sfx(TEXT("bolt"), -6.f, 2.2f);
 		PGunCd = W.Time;
 		FireBullet(PFace);
 		PAct = EDSAct::Shoot;
@@ -413,11 +431,13 @@ void ADSGame::TryAttack(const FVector2D& Iv, float Il)
 	for (const FDSEnemyPtr& E : Enemies)
 	{
 		if (E->bDead || (E->Mode == EDSMode::Idle && !E->bForce)) continue;
+		if (IsTp() && FMath::Abs(AngleDiff(AngleOf(E->Pos - PPos), PFace)) > 1.1f) continue;
 		const float D = FVector2D::Distance(PPos, E->Pos) - E->R;
 		if (D < Bd) { Bd = D; Best = E; }
 	}
 	if (Best.IsValid()) PFace = AngleOf(Best->Pos - PPos);
-	else if (Il > 0.1f) PFace = AngleOf(Iv);
+	else if (Il > 0.1f && !IsTp()) PFace = AngleOf(Iv);
+	Sfx(TEXT("swing"), (PCombo == Chain.Num() - 1) ? -3.f : -6.f, FMath::FRandRange(0.9f, 1.2f) * (PAtk.bSlam ? 0.7f : 1.f));
 }
 
 void ADSGame::MeleeHit()
@@ -502,6 +522,7 @@ void ADSGame::UseSkill(int32 Slot)
 void ADSGame::QuakeHit()
 {
 	Shake = FMath::Max(Shake, 24.f);
+	Sfx(TEXT("boom"), 2.f, 0.7f);
 	Ring(PPos, FLinearColor(1.f, 0.48f, 0.19f), 11.f, 0.7f);
 	Burst(PPos, 24, FLinearColor(1.f, 0.48f, 0.19f), 12.f, 0.3f);
 	Burst(PPos, 12, FLinearColor(0.54f, 0.42f, 0.29f), 9.f, 0.4f);
@@ -633,6 +654,7 @@ void ADSGame::HurtPlayer(float Dmg, const FVector2D& Src, bool bUnblockable)
 {
 	if (PInv > 0.f || PAct == EDSAct::Dead || State != EDSState::Play) return;
 	Dmg *= DefenseMult();
+	Sfx(TEXT("hit"), -5.f, FMath::FRandRange(0.8f, 1.f));
 	const float ToSrc = AngleOf(Src - PPos);
 	const float Side = FMath::Sign(AngleDiff(PFace, ToSrc));
 	if (!bUnblockable && PAct == EDSAct::Block && FMath::Abs(AngleDiff(ToSrc, PFace)) < 1.3f && PSt > 0.f)
@@ -672,6 +694,7 @@ void ADSGame::HurtPlayer(float Dmg, const FVector2D& Src, bool bUnblockable)
 		}
 		return;
 	}
+	Sfx(TEXT("hurt"), -4.f);
 	if (PAct == EDSAct::Attack || PAct == EDSAct::Drink || PAct == EDSAct::Cast || PAct == EDSAct::Shoot ||
 		PAct == EDSAct::Flurry || PAct == EDSAct::Fan || PAct == EDSAct::Blast)
 		PAct = EDSAct::Idle;
@@ -687,6 +710,8 @@ void ADSGame::HurtPlayer(float Dmg, const FVector2D& Src, bool bUnblockable)
 	if (PHp <= 0.f)
 	{
 		PHp = 0.f;
+		ExecAbort();
+		for (const FDSEnemyPtr& B : Enemies) if (B->bBoss && !B->bDead) { BossSay(*B, 9, true); break; }
 		State = EDSState::Dead;
 		PAct = EDSAct::Dead;
 		EndTimer = 0.f;

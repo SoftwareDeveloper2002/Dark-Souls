@@ -15,7 +15,7 @@ class AExponentialHeightFog;
 class ASkyLight;
 class UDSSaveGame;
 
-enum class EDSState : uint8 { Title, Play, Dead, Win };
+enum class EDSState : uint8 { Title, Play, Dead, Win, Comic };
 enum class EDSEState : uint8 { Chase, Wind, Strike, Recover, Stagger };
 enum class EDSMode : uint8 { Idle, Alert, Return };
 enum class EDSBossAtk : uint8 { None, Slam, Sweep, Charge, Volley, Bolts, Summon, Roll, Gaze, Stone, Bite, Spit, Tail, Fist, Laser, Missiles };
@@ -61,6 +61,14 @@ struct FDSEnemy
 	// pose bookkeeping
 	float Walk = 0.f;
 	float DeadT = 0.f;
+	// execution (finisher) state: Exec >= 0 while being finished
+	float Exec = -1.f;
+	// boss trash-talk state (boss_talk.gd)
+	float TkCd = 2.5f, TkIdle = 12.f, TkLastHp = -1.f, TkDodgeCd = 0.f, TkBlockCd = 0.f;
+	int32 TkFlasks = -1;
+	bool TkLow = false, TkEngaged = false;
+	bool TkMarks[3] = { false, false, false };
+	FString TkLast[11];
 };
 using FDSEnemyPtr = TSharedPtr<FDSEnemy>;
 
@@ -246,7 +254,7 @@ private:
 	void HurtPlayer(float Dmg, const FVector2D& Src, bool bUnblockable = false);
 	void PetrifyPlayer(float Secs, float Dmg);
 	void SetRage(bool bOn);
-	bool IsTp() const { return false; }
+	bool IsTp() const { return MazeK > 0.3f && !bExecActive; }
 
 	// ---- enemies
 	FDSEnemyPtr SpawnEnemy(EDSEnemy Kind, const FVector2D* At, bool bQuest = true, bool bIdle = false);
@@ -358,6 +366,181 @@ private:
 	UPROPERTY() TObjectPtr<AActor> FloorPlane;
 	UPROPERTY() TArray<TObjectPtr<ADSVisual>> BallPool;
 
+public:
+	// =================================================================== world structures (DSGameWorld.cpp)
+	struct FDSWall { FVector2D A, B; float R; };
+	TArray<FDSWall> Walls;
+	TMap<int64, TArray<int32>> WallGrid;                    // 8 m cells -> wall indices
+	TMap<int64, TArray<FVector>> Trunks;                    // 6 m cells -> (x, y, radius)
+	bool WallHit(const FVector2D& P, float Rad) const;      // walls and tree trunks
+	bool WallOnly(const FVector2D& P, float Rad) const;     // built walls only
+	void AddWall(const FVector2D& A, const FVector2D& B, float Thick);
+
+	// tunnel
+	TArray<FVector2D> TunnelPts;
+	float TunnelW = 5.f;
+	void BuildTunnel();
+	float TunnelDepth(const FVector2D& P) const;            // 0 outside .. 1 deep inside
+
+	// labyrinth (quest 27)
+	struct FDSChest { FVector2D Pos; int32 Kind = 0; bool bOpened = false; float T = -1.f; TWeakObjectPtr<ADSVisual> Node; };   // Kind: 0 gun, 1 ammo, 2 souls, 3 potion
+	struct FDSMaze
+	{
+		bool bBuilt = false;
+		FVector2D Center, Origin, Entrance, Exit;
+		float Cell = 6.f, Size = 90.f;
+		int32 N = 15;
+		TArray<FDSChest> Chests;
+		TArray<FVector2D> Dead, CivSpots;
+		TArray<TWeakObjectPtr<AActor>> Actors;
+	} Maze;
+	void BuildMaze(const FVector2D& Center, const FVector2D& Travel);
+	float MazeMargin(const FVector2D& P) const;
+	bool InMaze(const FVector2D& P) const;
+	TArray<FVector2D> MazeSpawnPoints(int32 Count, const FVector2D& Avoid, const TArray<FVector2D>& KeepClear) const;
+	int32 ChestNear(const FVector2D& P, float Reach) const;
+	void OpenMazeChest(int32 I);
+	void UpdateChests(float Dt);
+	void MazeFailed(const FString& Reason);
+	float MazeFailT = -1.f;
+	float MazeK = 0.f;                                      // 0 = top-down camera, 1 = third person inside the labyrinth
+	float CamYaw = 0.f;
+
+	// torch
+	bool bTorchActive = false, bTorchHeld = false;
+	FVector2D TorchGround = FVector2D(1e9, 1e9);
+	TWeakObjectPtr<ADSVisual> TorchFloor;
+	UPROPERTY() TObjectPtr<class APointLight> TorchLight;
+	UPROPERTY() TObjectPtr<class APointLight> TorchFloorLight;
+	float DarkK = 0.f;
+	void TorchEnter();
+	void TorchLeave();
+	void TorchToggle();
+	bool TorchCanPick() const;
+	void TorchUpdate(float Dt);
+
+	// civilians
+	struct FDSCivilian
+	{
+		TWeakObjectPtr<ADSVisual> Fig, Beam;
+		FVector2D Pos;
+		int32 State = 0;                                    // 0 hiding, 1 follow, 2 stay, 3 escape, 4 gone, 5 dead
+		float Face = 0.f, Walk = 0.f, T = 0.f, Hp = 80.f, HitT = 0.f;
+		int32 Order = -1;
+	};
+	TArray<FDSCivilian> Civs;
+	TArray<FVector2D> CivTrail;
+	int32 CivTotal = 0, CivRescued = 0;
+	bool bCivStay = false, bCivFreed = false;
+	float CivFreeT = 0.f;
+	void CivSpawn(const TArray<FVector2D>& Spots);
+	void CivClear();
+	void CivUpdate(float Dt);
+	void CivRescue(int32 I);
+	void CivCommand();
+	int32 CivNear(const FVector2D& P, float Reach) const;
+	int32 CivCount(int32 State) const;
+	bool CivAllSaved() const;
+
+	// bridge (quest 30)
+	struct FDSBridge { bool bBuilt = false; FVector2D Center, D, N, BossPos; float HalfLen = 22.f, HalfW = 4.3f, Base = 0.f; } Bridge;
+	bool bBridgeActive = false;
+	void BuildBridge(const FVector2D& Center, const FVector2D& D);
+	bool OnBridge(const FVector2D& P) const;
+	FVector2D BridgeClamp(const FVector2D& P) const;
+
+	// forest
+	TMap<int64, TWeakObjectPtr<ADSVisual>> ForestChunks;
+	TArray<FVector2D> Clearings;
+	void UpdateForest(const FVector2D& Focus);
+	void MakeForestChunk(int32 Cx, int32 Cy);
+	bool ForestCleared(const FVector2D& P) const;
+	FVector2D NearestTree(const FVector2D& P, float Reach) const;
+
+	// =================================================================== extras (DSGameExtras.cpp)
+	// boss talk
+	struct FDSSpeech { TWeakPtr<FDSEnemy> Who; FString Text; float T = 0.f, Life = 3.f; FLinearColor Col; };
+	TArray<FDSSpeech> Speeches;
+	void BossSay(FDSEnemy& E, int32 Kind, bool bForce = false);
+	void BossTalkUpdate(FDSEnemy& E, float Dt);
+	void Speak(FDSEnemy& E, const FString& Text, FLinearColor Col);
+
+	// emblems
+	struct FDSEmblem { FVector2D Pos = FVector2D(1e9, 1e9); bool bLive = false; int32 Quest = 0; int32 Src = 0; TWeakObjectPtr<ADSVisual> Node; };
+	TArray<FDSEmblem> Emblems;
+	TArray<int32> EmblemsFound;
+	TArray<FVector2D> CampTents, CampRocks;
+	void EmblemsInit();
+	void EmblemsCampBuilt(int32 Quest, const FVector2D& C);
+	void EmblemsCampFreed();
+	void EmblemsMazeBuilt();
+	void EmblemsUpdate(float Dt);
+	bool EmblemsComplete() const { return EmblemsFound.Num() >= 12; }
+
+	// execution finisher
+	bool bExecActive = false;
+	FDSEnemyPtr ExecTarget;
+	FString ExecKind;
+	float ExecT = 0.f, ExecDur = 2.4f;
+	int32 ExecStage = 0;
+	TWeakObjectPtr<ADSVisual> ExecHead;
+	FVector ExecHeadVel = FVector::ZeroVector;
+	FDSEnemyPtr ExecFind() const;
+	bool ExecCan(const FDSEnemy& E) const;
+	void ExecStart(FDSEnemyPtr E);
+	void ExecUpdate(float Dt);
+	void ExecAbort();
+	float ExecCamBlend = 0.f;
+	FVector2D ExecFrom = FVector2D::ZeroVector, ExecDir = FVector2D(1, 0);
+	float ExecPre = 0.f, ExecSlowLeft = 0.f, ExecHitStop = 0.f, ExecOrbit = 1.f;
+	float CamPitchK = 1.f;
+
+	// map
+	bool bMapOpen = false;
+	UPROPERTY() TObjectPtr<class UTexture2D> MapTex;
+	FVector2D MapOrigin = FVector2D::ZeroVector, MapSizeM = FVector2D::ZeroVector;
+	FVector2D MapCentre = FVector2D::ZeroVector;
+	float MapScale = 0.5f;                                  // pixels per metre
+	int32 MapW = 0, MapH = 0, MapRow = 0;
+	TArray<FColor> MapPixels;
+	TArray<float> MapHeights;
+	bool bMapReady = false;
+	static constexpr float MapStep = 8.f;
+	void MapBuildStep();
+	void ToggleMap() { if (State == EDSState::Play && bMapReady) bMapOpen = !bMapOpen; }
+
+	// comic epilogue + credits
+	int32 ComicPage = 0;
+	int32 ComicShown = 0;
+	float ComicT = 0.f;
+	bool bCredits = false;
+	float CreditsT = 0.f;
+	void ComicStart();
+	void ComicTap();
+
+	// weather and audio
+	struct FDSRain { TWeakObjectPtr<ADSVisual> Node; FVector Off; float Speed; };
+	TArray<FDSRain> RainDrops;
+	float ThunderTimer = 6.f, FlashT = 99.f, FlashLen = 0.5f, FlashPow = 1.f;
+	float FlashAmount = 0.f;                                // 0..1, drawn by the HUD as a white veil
+	float FxIntensity = 1.f;
+	float MusicVol = 1.f, SfxVol = 1.f;
+	FString CurMusic;
+	UPROPERTY() TObjectPtr<class UAudioComponent> MusicComp;
+	UPROPERTY() TMap<FString, TObjectPtr<class USoundBase>> SoundCache;
+	void Sfx(const FString& Name, float VolDb = 0.f, float Pitch = 1.f);
+	void Music(const FString& Track);
+	void Voice(const FString& Name);
+	void WeatherUpdate(float Dt);
+	void TunnelBannerCheck();
+	void ApplyLighting();
+	float MoonBase = 0.9f;
+
+	// quest hooks
+	void QuestExtrasBegin(int32 N);
+	bool bTunnelSeen = false;
+
+private:
 	friend class ADSHUD;
 	friend class ADSPlayerController;
 };

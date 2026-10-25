@@ -39,14 +39,37 @@ Rerun `python unreal/tools/export_terrain.py` (Python 3.14, needs `compression.z
 
 All numbers (HP, damage, speeds, timings, costs, quest scaling) are copied from the GDScript, and the simulation runs in the same 2D plane in metres. `ADSGame` is the direct counterpart of `game.gd`.
 
-## What is not ported yet
+### Added in the second pass
 
-- **Art:** the Godot game builds all models in code (`models.gd`, `vox.gd`). Here every character, projectile and prop is made of engine primitives (`ADSVisual`). Replace `ADSGame::BuildFigure` / `BuildPlayerFigure` with skeletal meshes and animations when you have art.
-- **Labyrinth (quest 27):** torch, civilians and the maze treasure (`structures.gd`, `torch.gd`, `civilians.gd`). Quest 27 plays as a survival fight and awards the revolver on completion.
-- **Bridge/Titan set-piece geometry (quest 30)**, execution finishers (`execution.gd`), the comic epilogue, emblem hunt, map view, boss speech bubbles (`boss_talk.gd`), the title/cinematic scenes.
-- **Rain, lightning ambience, procedural SFX and music** (`fx.gd`, `sfx.gd`, `music.gd`, `vox.gd`). The `.wav` files that Unreal can import directly are in `Content/ImportSource/Audio`; the `.ogg`/`.mp3` voice and ambience files in `assets/audio/vox` need converting to `.wav` first.
-- **Translucent telegraphs:** the shield dome, gaze cone and ground zones are opaque primitives because the engine's `BasicShapeMaterial` is opaque. Swap in a translucent material in `ADSVisual::AddPart` if you want the Godot look.
+| Godot | Unreal |
+|---|---|
+| `structures.gd` (walls, tunnel, labyrinth with chests, bridge), `forest.gd` | `DSGameWorld.cpp` (instanced-mesh walls, collision grid, procedural trees) |
+| `torch.gd`, `civilians.gd` (dark labyrinth, rescue, follow/stay, mauling, fail + retry) | `DSGameWorld.cpp` |
+| `boss_talk.gd` (speech bubbles; lines generated into `DSBossLines.inc`) | `DSGameExtras.cpp`, `DSHUD.cpp` |
+| `emblems.gd` (12 hidden emblems, unlimited ammo reward, saved) | `DSGameExtras.cpp` |
+| `execution.gd` (GRAB finishers, camera orbit, slow-mo, 11 named fatalities) | `DSGameExtras.cpp` |
+| `map_view.gd` (relief map + minimap, drag/zoom) | `DSGameExtras.cpp`, `DSHUD.cpp` |
+| `comic.gd` + credits (epilogue after the final boss) | `DSData.cpp`, `DSHUD.cpp` |
+| `fx.gd` rain/lightning/darkness, `music.gd`, `sfx.gd` | `DSGameExtras.cpp` (+ `tools/make_sfx.py`) |
+
+Terrain edits the Godot game makes at runtime (boss arena flattening, labyrinth floor, the bridge chasm) are baked into the exported heightmap, because Unreal cannot edit a Landscape while playing.
+
+### Audio setup
+
+Sounds are looked up by name at runtime, and silently skipped when missing:
+
+1. `python unreal/tools/make_sfx.py` synthesises every effect (port of `sfx.gd`) into `Content/ImportSource/Audio/Sfx`.
+2. `powershell unreal/tools/convert_audio.ps1` (needs ffmpeg) converts the music and voice files to `.wav`.
+3. In the editor import those folders to `/Game/Audio/Sfx`, `/Game/Audio/Music` and `/Game/Audio/Vox`, keeping the file names.
+
+## Still different from the Godot build
+
+- **Art:** the Godot game builds all models in code (`models.gd`, `vox.gd`). Here every character, prop and effect is made of engine primitives (`ADSVisual`), with simple procedural poses (lean, swing, fall). Replace `ADSGame::BuildFigure` / `BuildPlayerFigure` with skeletal meshes and animations when you have art.
+- **Finishers** are the same sequence of events (grab, blows, named fatality, head flying off, slow-mo) but without the gore props, anatomical heart or bespoke camera paths of `execution.gd`.
+- **Comic panels** are flat colour scenes with silhouettes, not the rendered 3D panels of `comic_art.gd`; the captions, speech bubbles and page flow are the same.
+- **Translucency:** the shield dome, gaze cone and ground zones are opaque primitives because the engine's `BasicShapeMaterial` is opaque. Swap in a translucent material in `ADSVisual::AddPart` for the Godot look.
 - The Terrain3D hole mask (height 0 = not walkable) is not exported; slopes steeper than 0.85 are still refused as in Godot.
+- The settings screen of the Godot build (graphics quality levels) is reduced to music/effects volume in the pause menu.
 
 ## Mobile notes
 

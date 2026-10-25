@@ -1,5 +1,6 @@
 #include "DSVisual.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -77,4 +78,31 @@ void ADSVisual::SetCollisionOff()
 void ADSVisual::Place(const FVector& WorldCm, float FacingRad)
 {
 	SetActorLocationAndRotation(WorldCm, FRotator(0.0, FMath::RadiansToDegrees(FacingRad), 0.0));
+}
+
+UInstancedStaticMeshComponent* ADSVisual::AddInstanced(EDSShape Shape, const FLinearColor& Color)
+{
+	static const TCHAR* Paths[] = {
+		TEXT("/Engine/BasicShapes/Cube.Cube"), TEXT("/Engine/BasicShapes/Sphere.Sphere"),
+		TEXT("/Engine/BasicShapes/Cylinder.Cylinder"), TEXT("/Engine/BasicShapes/Cone.Cone") };
+	UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, Paths[(int32)Shape]);
+	UMaterialInterface* Base = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+	UInstancedStaticMeshComponent* C = NewObject<UInstancedStaticMeshComponent>(this);
+	C->SetMobility(EComponentMobility::Movable);
+	C->SetStaticMesh(Mesh);
+	C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	C->SetCastShadow(false);
+	C->SetupAttachment(Pivot);
+	C->RegisterComponent();
+	if (UMaterialInstanceDynamic* M = UMaterialInstanceDynamic::Create(Base, this))
+	{
+		M->SetVectorParameterValue(TEXT("Color"), Color);
+		C->SetMaterial(0, M);
+	}
+	return C;
+}
+
+void ADSVisual::AddInstance(UInstancedStaticMeshComponent* C, const FVector& WorldCm, const FVector& ScaleMetres, float YawRad)
+{
+	if (C) C->AddInstance(FTransform(FRotator(0.0, FMath::RadiansToDegrees(YawRad), 0.0), WorldCm, ScaleMetres), true);
 }

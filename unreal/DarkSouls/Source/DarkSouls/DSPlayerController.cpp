@@ -33,6 +33,9 @@ void ADSPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::Q, IE_Pressed, this, &ADSPlayerController::KeySwap);
 	InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ADSPlayerController::KeyPause);
 	InputComponent->BindKey(EKeys::Enter, IE_Pressed, this, &ADSPlayerController::KeyTap);
+	InputComponent->BindKey(EKeys::T, IE_Pressed, this, &ADSPlayerController::KeyTorch);
+	InputComponent->BindKey(EKeys::F, IE_Pressed, this, &ADSPlayerController::KeyCommand);
+	InputComponent->BindKey(EKeys::M, IE_Pressed, this, &ADSPlayerController::KeyMap);
 }
 
 void ADSPlayerController::KeyAttack() { if (ADSGame* G = GetGame()) { if (G->bDialogActive || G->State == EDSState::Dead || G->State == EDSState::Win) G->TapScreen(); else G->PressAttack(); } }
@@ -42,6 +45,9 @@ void ADSPlayerController::KeySkill1() { if (ADSGame* G = GetGame()) G->PressSkil
 void ADSPlayerController::KeySkill2() { if (ADSGame* G = GetGame()) G->PressSkill(1); }
 void ADSPlayerController::KeySwap() { if (ADSGame* G = GetGame()) G->CycleWeapon(); }
 void ADSPlayerController::KeyPause() { if (ADSGame* G = GetGame()) G->TogglePause(); }
+void ADSPlayerController::KeyTorch() { if (ADSGame* G = GetGame()) G->TorchToggle(); }
+void ADSPlayerController::KeyCommand() { if (ADSGame* G = GetGame()) G->CivCommand(); }
+void ADSPlayerController::KeyMap() { if (ADSGame* G = GetGame()) G->ToggleMap(); }
 void ADSPlayerController::KeyTap() { if (ADSGame* G = GetGame()) G->TapScreen(); }
 
 void ADSPlayerController::TouchDown(ETouchIndex::Type Finger, FVector Loc)
@@ -63,7 +69,12 @@ void ADSPlayerController::TouchDown(ETouchIndex::Type Finger, FVector Loc)
 		else G->OnButton(Id);
 		return;
 	}
-	if (G->State != EDSState::Title && (G->bDialogActive || G->State == EDSState::Dead || G->State == EDSState::Win))
+	if (G->bMapOpen)
+	{
+		if (MapFinger < 0) { MapFinger = (int32)Finger; MapLast = P; }
+		return;
+	}
+	if (G->State != EDSState::Title && (G->bDialogActive || G->State == EDSState::Dead || G->State == EDSState::Win || G->State == EDSState::Comic))
 	{
 		G->TapScreen();
 		return;
@@ -72,6 +83,11 @@ void ADSPlayerController::TouchDown(ETouchIndex::Type Finger, FVector Loc)
 	{
 		int32 SX = 0, SY = 0;
 		GetViewportSize(SX, SY);
+		if (P.X >= SX * 0.55f && G->MazeK > 0.3f && LookFinger < 0)
+		{
+			LookFinger = (int32)Finger;
+			LookLast = P;
+		}
 		if (P.X < SX * 0.55f)
 		{
 			StickFinger = (int32)Finger;
@@ -89,6 +105,8 @@ void ADSPlayerController::TouchUp(ETouchIndex::Type Finger, FVector Loc)
 		StickFinger = -1;
 		bStickActive = false;
 	}
+	if ((int32)Finger == LookFinger) LookFinger = -1;
+	if ((int32)Finger == MapFinger) MapFinger = -1;
 	Held.Remove((int32)Finger);
 }
 
@@ -103,6 +121,28 @@ void ADSPlayerController::PlayerTick(float DeltaTime)
 		bViewSet = true;
 	}
 
+	// drag on the right side: look around inside the labyrinth; drag on the map: pan it
+	if (LookFinger >= 0)
+	{
+		float X = 0.f, Y = 0.f;
+		bool bDown = false;
+		GetInputTouchState((ETouchIndex::Type)LookFinger, X, Y, bDown);
+		if (bDown) { G->CamYaw -= (X - LookLast.X) * 0.006f; LookLast = FVector2D(X, Y); }
+		else LookFinger = -1;
+	}
+	if (MapFinger >= 0)
+	{
+		float X = 0.f, Y = 0.f;
+		bool bDown = false;
+		GetInputTouchState((ETouchIndex::Type)MapFinger, X, Y, bDown);
+		if (bDown) { G->MapCentre -= (FVector2D(X, Y) - MapLast) / FMath::Max(G->MapScale, 0.05f); MapLast = FVector2D(X, Y); }
+		else MapFinger = -1;
+	}
+	if (G->MazeK > 0.3f)
+	{
+		if (IsInputKeyDown(EKeys::Z)) G->CamYaw += 1.8f * DeltaTime;
+		if (IsInputKeyDown(EKeys::C)) G->CamYaw -= 1.8f * DeltaTime;
+	}
 	FVector2D Move = FVector2D::ZeroVector;
 	if (StickFinger >= 0)
 	{

@@ -6,6 +6,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "Components/AudioComponent.h"
 
 // ================================================================== new game / continue
 
@@ -16,6 +17,7 @@ bool ADSGame::HasSave() const
 
 void ADSGame::EnterGame()
 {
+	Music(TEXT("game"));
 	State = EDSState::Play;
 	bPaused = false;
 	bShopOpen = false;
@@ -47,6 +49,7 @@ void ADSGame::StartNewGame()
 	Souls = LostSouls = Keys = Ammo = 0;
 	Flasks = 3;
 	bUnlimitedAmmo = false;
+	EmblemsFound.Reset();
 	bHasWeapon = false;
 	QuestN = 1;
 	EnterGame();
@@ -91,7 +94,8 @@ void ADSGame::ContinueGame()
 	Ammo = D->Ammo;
 	Flasks = D->Flasks;
 	Keys = D->Keys;
-	bUnlimitedAmmo = D->bUnlimitedAmmo;
+	EmblemsFound = D->Emblems;
+	bUnlimitedAmmo = D->bUnlimitedAmmo || EmblemsComplete();
 	bHasWeapon = true;
 	bSwordOnGround = false;
 	EnterGame();
@@ -123,6 +127,7 @@ void ADSGame::Save()
 	D->Flasks = Flasks;
 	D->Keys = Keys;
 	D->bUnlimitedAmmo = bUnlimitedAmmo;
+	D->Emblems = EmblemsFound;
 	UGameplayStatics::SaveGameToSlot(D, UDSSaveGame::SlotName, 0);
 }
 
@@ -155,6 +160,7 @@ void ADSGame::UpdateDialog(float Dt)
 
 void ADSGame::TapScreen()
 {
+	if (State == EDSState::Comic) { ComicTap(); return; }
 	if (bDialogActive)
 	{
 		const int32 Len = FCString::Strlen(DialogLines[DialogIdx].Text);
@@ -172,14 +178,7 @@ void ADSGame::TapScreen()
 	}
 	if ((State == EDSState::Dead || State == EDSState::Win) && EndTimer > 2.2f)
 	{
-		if (State == EDSState::Win)
-		{
-			UGameplayStatics::DeleteGameInSlot(UDSSaveGame::SlotName, 0);
-			ClearField();
-			State = EDSState::Title;
-			bHasSaveCached = false;
-			if (PlayerFig) PlayerFig->SetActorHiddenInGame(true);
-		}
+		if (State == EDSState::Win) ComicStart();
 		else Respawn();
 	}
 }
@@ -200,6 +199,16 @@ void ADSGame::OnButton(const FString& Id)
 		return;
 	}
 	if (Id == TEXT("swap")) { CycleWeapon(); return; }
+	if (Id == TEXT("torch")) { TorchToggle(); return; }
+	if (Id == TEXT("cmd")) { CivCommand(); return; }
+	if (Id == TEXT("minimap") || Id == TEXT("mapclose")) { ToggleMap(); return; }
+	if (Id == TEXT("mapzoomin")) { MapScale = FMath::Min(MapScale * 1.4f, 3.f); return; }
+	if (Id == TEXT("mapzoomout")) { MapScale = FMath::Max(MapScale / 1.4f, 0.15f); return; }
+	if (Id == TEXT("maprecentre")) { MapCentre = PPos; return; }
+	if (Id == TEXT("mus-")) { MusicVol = FMath::Max(0.f, MusicVol - 0.2f); if (MusicComp) MusicComp->SetVolumeMultiplier(MusicVol); return; }
+	if (Id == TEXT("mus+")) { MusicVol = FMath::Min(1.f, MusicVol + 0.2f); if (MusicComp) MusicComp->SetVolumeMultiplier(MusicVol); return; }
+	if (Id == TEXT("sfx-")) { SfxVol = FMath::Max(0.f, SfxVol - 0.2f); return; }
+	if (Id == TEXT("sfx+")) { SfxVol = FMath::Min(1.f, SfxVol + 0.2f); return; }
 	if (bShopOpen) ShopBuy(Id);
 }
 
@@ -281,6 +290,7 @@ void ADSGame::CloseShop()
 
 void ADSGame::BeginQuest(int32 N, bool bIntro, bool bWithFire)
 {
+	MazeFailT = -1.f;
 	QuestN = N;
 	Q = DSData::MakeQuest(N);
 	Site = DSData::Site(N);
@@ -298,6 +308,11 @@ void ADSGame::BeginQuest(int32 N, bool bIntro, bool bWithFire)
 		BuildBonfire(PPos + FVector2D(-3, 2));
 	}
 	ApplyChapter(Q.Ch);
+	Music(TEXT("game"));
+	FxIntensity = 1.f;
+	// one-off structures are built on demand
+	if (N == 27 && !Maze.bBuilt) BuildMaze(Site, DSData::DirAt(DSData::SiteIndex(27)));
+	else if (N == 30 && !Bridge.bBuilt) BuildBridge(Site, DSData::DirAt(DSData::SiteIndex(30)));
 	SetupWayside();
 	if (bIntro && Q.Idx == 1)
 	{
@@ -313,6 +328,7 @@ void ADSGame::BeginQuest(int32 N, bool bIntro, bool bWithFire)
 
 void ADSGame::FreeCamp()
 {
+	EmblemsCampFreed();
 	for (TWeakObjectPtr<ADSVisual>& P : CampProps) if (P.IsValid()) P->Destroy();
 	CampProps.Reset();
 	for (TWeakObjectPtr<AActor>& L : CampLights) if (L.IsValid()) L->Destroy();
@@ -332,7 +348,7 @@ void ADSGame::BuildBonfire(const FVector2D& At)
 		L->GetRootComponent()->SetMobility(EComponentMobility::Movable);
 		L->GetLightComponent()->SetLightColor(FLinearColor(1.f, 0.55f, 0.2f));
 		L->GetLightComponent()->SetIntensity(8000.f);
-		L->GetLightComponent()->SetAttenuationRadius(1500.f);
+		L->PointLightComponent->SetAttenuationRadius(1500.f);
 		CampLights.Add(L);
 	}
 }
@@ -349,6 +365,17 @@ void ADSGame::BuildCamp(const FVector2D& C, int32 Ch, bool bBoss)
 		T->AddPart(EDSShape::Cone, FVector(0, 0, 1.3), FVector(3.4, 3.4, 2.6), Faction[Ch]);
 		CampProps.Add(T);
 	}
+	CampTents.Reset();
+	CampRocks.Reset();
+	for (int32 i = 0; i < Tents; i++) CampTents.Add(C + FromAngle((float)i / Tents * 2.f * PI + 0.4f) * 10.f);
+	for (int32 i = 0; i < 3 && !bBoss; i++)
+	{
+		const FVector2D Rp = C + FromAngle(i * 2.2f + 1.f) * 7.f;
+		ADSVisual* Rk = GetWorld()->SpawnActor<ADSVisual>(P3(Rp), FRotator::ZeroRotator);
+		Rk->AddPart(EDSShape::Sphere, FVector(0, 0, 0.5), FVector(1.6, 1.3, 1.1), FLinearColor(0.3f, 0.3f, 0.32f));
+		CampProps.Add(Rk);
+		CampRocks.Add(Rp);
+	}
 	// a ring of standing stones: the arena for boss fights
 	if (bBoss)
 	{
@@ -361,13 +388,18 @@ void ADSGame::BuildCamp(const FVector2D& C, int32 Ch, bool bBoss)
 		}
 	}
 	BuildBonfire(C + FVector2D(0, 3));
+	EmblemsCampBuilt(QuestN, C);
 }
 
 void ADSGame::SpawnCamp()
 {
+	if (Q.Kind == EDSQuestKind::Maze && !Maze.bBuilt) return;
 	bCampSpawned = true;
-	FreeCamp();
-	BuildCamp(Site, Q.Ch, Q.Kind == EDSQuestKind::Boss);
+	if (Q.Kind != EDSQuestKind::Maze && QuestN != 30)
+	{
+		FreeCamp();
+		BuildCamp(Site, Q.Ch, Q.Kind == EDSQuestKind::Boss);
+	}
 	switch (Q.Kind)
 	{
 	case EDSQuestKind::Kill:
@@ -388,9 +420,22 @@ void ADSGame::SpawnCamp()
 		}
 		break;
 	}
+	case EDSQuestKind::Maze:
+	{
+		CivSpawn(Maze.CivSpots);
+		static const EDSEnemy MazeKinds[] = { EDSEnemy::Zombie, EDSEnemy::Ghoul, EDSEnemy::Hound, EDSEnemy::Skeleton, EDSEnemy::Ghoul, EDSEnemy::Fiend, EDSEnemy::Hound, EDSEnemy::Zombie, EDSEnemy::Skeleton, EDSEnemy::Ghoul, EDSEnemy::Hound, EDSEnemy::Fiend, EDSEnemy::Zombie };
+		const TArray<FVector2D> Pts = MazeSpawnPoints(13, Maze.Entrance, Maze.CivSpots);
+		for (int32 i = 0; i < Pts.Num(); i++)
+		{
+			FDSEnemyPtr E = SpawnEnemy(MazeKinds[i % UE_ARRAY_COUNT(MazeKinds)], &Pts[i], false, true);
+			E->bWayside = true;
+		}
+		break;
+	}
 	case EDSQuestKind::Boss:
 	{
-		const FVector2D Bp = Site + FVector2D(0, -8);
+		FVector2D Bp = Site + FVector2D(0, -8);
+		if (QuestN == 30) Bp = Bridge.BossPos;
 		SpawnEnemy(Q.Boss, &Bp, true, true);
 		break;
 	}
@@ -404,10 +449,17 @@ void ADSGame::Arrive()
 	for (const FDSEnemyPtr& E : Enemies) if (E->bQuest) E->bForce = true;
 	if (Q.Kind == EDSQuestKind::Boss)
 	{
-		bArenaActive = true;
+		if (QuestN == 30) bBridgeActive = true; else bArenaActive = true;
+		Sfx(TEXT("roar"), -2.f, 0.8f + 0.1f * Q.Ch);
+		Music(Q.Boss == EDSEnemy::Malakar ? TEXT("final") : TEXT("boss"));
+		FxIntensity = 1.8f;
 		Strike(Site + FVector2D(0, -8));
 		Shake = 10.f;
 		Say(DSData::BossIntro(QuestN), nullptr);
+	}
+	else if (Q.Kind == EDSQuestKind::Maze)
+	{
+		Say(DSData::MazeText(), nullptr);
 	}
 	ShowBanner(FString::Printf(TEXT("QUEST %d  -  %s"), QuestN, *Q.Title.ToUpper()), 2.4f);
 }
@@ -421,7 +473,9 @@ void ADSGame::QuestUpdate(float Dt)
 	if (!bCampSpawned && Dist < CampRange) SpawnCamp();
 	if (!bQArrived)
 	{
-		if (bCampSpawned && Dist < ArriveRange) Arrive();
+		const float Ar = QuestN == 30 ? 34.f : ArriveRange;
+		if (bCampSpawned && Q.Kind == EDSQuestKind::Maze) { if (MazeMargin(PPos) > 1.f) Arrive(); }
+		else if (bCampSpawned && Dist < Ar) Arrive();
 		return;
 	}
 	const int32 Alive = QuestEnemyCount();
@@ -465,6 +519,9 @@ void ADSGame::QuestUpdate(float Dt)
 		}
 		break;
 	}
+	case EDSQuestKind::Maze:
+		if (CivAllSaved()) CompleteQuest();
+		break;
 	case EDSQuestKind::Boss:
 	{
 		bool bDying = false;
@@ -487,17 +544,13 @@ void ADSGame::CompleteQuest()
 	bQDone = true;
 	QDoneT = 0.f;
 	bArenaActive = false;
+	bBridgeActive = false;
+	Sfx(TEXT("chime"), -4.f);
+	if (Q.Kind == EDSQuestKind::Boss) Music(TEXT("game"));
 	const int32 Reward = 40 + 12 * QuestN;
 	Souls += Reward;
 	ShowBanner(TEXT("QUEST COMPLETE"), 2.4f, FString::Printf(TEXT("+%d SOULS"), Reward));
 	QStage = TEXT("wait");
-	if (QuestN == 27)
-	{
-		// stands in for the labyrinth treasure of the Godot game
-		WeaponsOwned[(int32)EDSWeapon::Gun] = true;
-		Ammo = FMath::Max(Ammo, 20);
-		Float(P3(PPos, 3.f), TEXT("FOUND: ASHEN REVOLVER"), FLinearColor(1.f, 0.84f, 0.44f));
-	}
 }
 
 void ADSGame::SpawnChest()
@@ -640,6 +693,9 @@ void ADSGame::UpdateWayside()
 
 void ADSGame::ClearField()
 {
+	CivClear();
+	TorchLeave();
+	Speeches.Reset();
 	for (FDSEnemyPtr& E : Enemies) if (!E->bDead) RemoveEnemy(*E);
 	Enemies.Reset();
 	Wayside.Reset();
@@ -678,6 +734,10 @@ FString ADSGame::ControlLabel() const
 {
 	if (!bHasWeapon && bSwordOnGround && FVector2D::Distance(PPos, SwordPos) < 2.6f) return TEXT("TAKE");
 	if (!bHasWeapon) return TEXT("---");
+	if (ChestNear(PPos, 2.6f) >= 0) return TEXT("OPEN");
+	if (Q.Kind == EDSQuestKind::Maze && CivNear(PPos, 2.8f) >= 0) return TEXT("RESCUE");
+	if (bTorchHeld) return TEXT("NO WEAPON");
+	if (!bExecActive && ExecFind().IsValid()) return TEXT("GRAB");
 	return DSData::Weapon(Equipped).Style == EDSStyle::Shoot ? TEXT("SHOOT") : TEXT("ATTACK");
 }
 

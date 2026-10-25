@@ -27,4 +27,5 @@ public:
 	UPROPERTY() TArray<int32> ArmorsOwned;
 	UPROPERTY() int32 Armor = 0;
 	UPROPERTY() bool bUnlimitedAmmo = false;
+	UPROPERTY() TArray<int32> Emblems;
 };
