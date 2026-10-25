@@ -155,7 +155,7 @@ void ADSGame::BuildTunnel()
 			L->GetRootComponent()->SetMobility(EComponentMobility::Movable);
 			L->GetLightComponent()->SetLightColor(FLinearColor(1.f, 0.63f, 0.31f));
 			L->GetLightComponent()->SetIntensity(6000.f);
-			L->PointLightComponent->SetAttenuationRadius(1600.f);
+			DSSetLightRadius(L, 1600.f);
 		}
 	}
 	// bones, barrels and crates along the sides
@@ -284,16 +284,16 @@ void ADSGame::BuildMaze(const FVector2D& Center, const FVector2D& Travel)
 	// BFS depth from the entrance, then pick dead ends for the treasure
 	TMap<int64, int32> Depth;
 	Depth.Add(CellKey(Entrance.X, Entrance.Y), 0);
-	TArray<FIntPoint> Q;
-	Q.Add(Entrance);
-	for (int32 Qi = 0; Qi < Q.Num(); Qi++)
+	TArray<FIntPoint> Queue;
+	Queue.Add(Entrance);
+	for (int32 Qi = 0; Qi < Queue.Num(); Qi++)
 	{
-		const FIntPoint Cur = Q[Qi];
+		const FIntPoint Cur = Queue[Qi];
 		for (const FIntPoint& D : Dirs)
 		{
 			const FIntPoint Nb = Cur + D;
 			if (Nb.X < 0 || Nb.Y < 0 || Nb.X >= N || Nb.Y >= N || Depth.Contains(CellKey(Nb.X, Nb.Y))) continue;
-			if (OpenTo(Cur, D)) { Depth.Add(CellKey(Nb.X, Nb.Y), Depth[CellKey(Cur.X, Cur.Y)] + 1); Q.Add(Nb); }
+			if (OpenTo(Cur, D)) { Depth.Add(CellKey(Nb.X, Nb.Y), Depth[CellKey(Cur.X, Cur.Y)] + 1); Queue.Add(Nb); }
 		}
 	}
 	auto DepthOf = [&](const FIntPoint& C) { const int32* V = Depth.Find(CellKey(C.X, C.Y)); return V ? *V : -1; };
@@ -477,7 +477,7 @@ void ADSGame::TorchEnter()
 		TorchLight = GetWorld()->SpawnActor<APointLight>(FVector::ZeroVector, FRotator::ZeroRotator);
 		TorchLight->GetRootComponent()->SetMobility(EComponentMobility::Movable);
 		TorchLight->GetLightComponent()->SetLightColor(FLinearColor(1.f, 0.62f, 0.28f));
-		TorchLight->PointLightComponent->SetAttenuationRadius(1700.f);
+		DSSetLightRadius(TorchLight, 1700.f);
 		TorchLight->GetLightComponent()->SetCastShadows(false);
 	}
 	TorchLight->SetActorHiddenInGame(false);
@@ -515,7 +515,7 @@ void ADSGame::TorchToggle()
 			TorchFloorLight = GetWorld()->SpawnActor<APointLight>(FVector::ZeroVector, FRotator::ZeroRotator);
 			TorchFloorLight->GetRootComponent()->SetMobility(EComponentMobility::Movable);
 			TorchFloorLight->GetLightComponent()->SetLightColor(FLinearColor(1.f, 0.62f, 0.28f));
-			TorchFloorLight->PointLightComponent->SetAttenuationRadius(1700.f);
+			DSSetLightRadius(TorchFloorLight, 1700.f);
 			TorchFloorLight->GetLightComponent()->SetCastShadows(false);
 		}
 		TorchFloorLight->SetActorHiddenInGame(false);
@@ -598,10 +598,10 @@ int32 ADSGame::CivNear(const FVector2D& P, float Reach) const
 	return -1;
 }
 
-int32 ADSGame::CivCount(int32 State) const
+int32 ADSGame::CivCount(int32 WantState) const
 {
 	int32 N = 0;
-	for (const FDSCivilian& C : Civs) if (C.State == State) N++;
+	for (const FDSCivilian& C : Civs) if (C.State == WantState) N++;
 	return N;
 }
 
@@ -843,7 +843,7 @@ void ADSGame::MakeForestChunk(int32 Cx, int32 Cy)
 	const int64 Key = CellKey(Cx, Cy);
 	const bool bFirst = !ForestChunks.Contains(Key);
 	const float Chunk = 40.f;
-	FRandomStream Rng(Cx * 73856093 ^ Cy * 19349663 ^ 4242);
+	FRandomStream Rng((int32)((uint32)Cx * 73856093u ^ (uint32)Cy * 19349663u ^ 4242u));
 	const FVector2D Origin(Cx * Chunk, Cy * Chunk);
 	UWorld* W = GetWorld();
 	ADSVisual* V = W->SpawnActor<ADSVisual>(FVector::ZeroVector, FRotator::ZeroRotator);

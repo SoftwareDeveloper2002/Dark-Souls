@@ -348,7 +348,7 @@ void ADSGame::BuildBonfire(const FVector2D& At)
 		L->GetRootComponent()->SetMobility(EComponentMobility::Movable);
 		L->GetLightComponent()->SetLightColor(FLinearColor(1.f, 0.55f, 0.2f));
 		L->GetLightComponent()->SetIntensity(8000.f);
-		L->PointLightComponent->SetAttenuationRadius(1500.f);
+		DSSetLightRadius(L, 1500.f);
 		CampLights.Add(L);
 	}
 }

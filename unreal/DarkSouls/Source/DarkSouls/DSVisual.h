@@ -5,11 +5,20 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Engine/PointLight.h"
+#include "Components/PointLightComponent.h"
 #include "DSVisual.generated.h"
 
 class UStaticMeshComponent;
 class UMaterialInstanceDynamic;
 class UInstancedStaticMeshComponent;
+
+/** Sets a point light's reach (cm) without depending on how APointLight exposes its component. */
+inline void DSSetLightRadius(APointLight* L, float Radius)
+{
+	if (L)
+		if (UPointLightComponent* C = Cast<UPointLightComponent>(L->GetLightComponent())) C->SetAttenuationRadius(Radius);
+}
 
 UENUM()
 enum class EDSShape : uint8 { Cube, Sphere, Cylinder, Cone };

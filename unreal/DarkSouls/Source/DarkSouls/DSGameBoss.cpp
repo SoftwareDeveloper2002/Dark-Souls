@@ -132,7 +132,7 @@ void ADSGame::BossFreeNodes(FDSEnemy& E)
 	for (TWeakObjectPtr<ADSVisual>* N : { &E.Tele, &E.Tele2, &E.Cone, &E.Beam, &E.Dome })
 	{
 		if (N->IsValid()) (*N)->Destroy();
-		*N = nullptr;
+		N->Reset();
 	}
 }
 

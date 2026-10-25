@@ -282,7 +282,7 @@ void ADSGame::UpdateCamera(float Dt)
 		CamYaw = FMath::Lerp(CamYaw, YawT, 1.f - FMath::Exp(-3.f * Dt));
 	CamFocus = FMath::Lerp(CamFocus, Target, 1.0 - FMath::Exp(-(bCine ? 12.0 : 9.0) * Dt));
 	FVector Sh = FVector::ZeroVector;
-	if (Shake > 0.f) Sh = FVector(FMath::FRandRange(-1, 1), FMath::FRandRange(-1, 1), FMath::FRandRange(-1, 1)) * Shake * 1.2f;
+	if (Shake > 0.f) Sh = FVector(FMath::FRandRange(-1.f, 1.f), FMath::FRandRange(-1.f, 1.f), FMath::FRandRange(-1.f, 1.f)) * Shake * 1.2f;
 	// CAM_OFFSET rotated about the vertical axis (game plane x, y; up is z)
 	const float Yaw = CamYaw;
 	const FVector Off(12.4 * FMath::Sin(Yaw) * 100.0 * Cam_Zoom, 12.4 * FMath::Cos(Yaw) * 100.0 * Cam_Zoom, 17.2 * PitchK * 100.0 * Cam_Zoom);
@@ -546,7 +546,7 @@ void ADSGame::UpdateCorpses(float Dt)
 		}
 		if (C.bBoss && FMath::FRand() < Dt * 14.f)
 		{
-			Burst(FVector2D(F->GetActorLocation().X / 100.0, F->GetActorLocation().Y / 100.0) + FVector2D(FMath::FRandRange(-2, 2), FMath::FRandRange(-2, 2)), 4, FLinearColor(1.f, 0.6f, 0.2f), 6.f, FMath::FRandRange(0.5f, 3.f));
+			Burst(FVector2D(F->GetActorLocation().X / 100.0, F->GetActorLocation().Y / 100.0) + FVector2D(FMath::FRandRange(-2.f, 2.f), FMath::FRandRange(-2.f, 2.f)), 4, FLinearColor(1.f, 0.6f, 0.2f), 6.f, FMath::FRandRange(0.5f, 3.f));
 		}
 		if (C.T > (C.bBoss ? 5.2f : 3.2f))
 		{

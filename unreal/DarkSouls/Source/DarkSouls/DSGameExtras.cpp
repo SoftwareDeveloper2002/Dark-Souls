@@ -211,11 +211,11 @@ void ADSGame::EmblemsInit()
 {
 	Emblems.Reset();
 	static const int32 CampQuests[3] = { 5, 12, 20 };
-	for (int32 Q : CampQuests)
+	for (int32 CampQ : CampQuests)
 		for (int32 Src = 0; Src < 3; Src++)   // 0 tent, 1 rock, 2 tree
 		{
 			FDSEmblem E;
-			E.Quest = Q;
+			E.Quest = CampQ;
 			E.Src = Src;
 			Emblems.Add(E);
 		}
@@ -261,7 +261,7 @@ void ADSGame::EmblemsCampFreed()
 		{
 			E.bLive = false;
 			if (E.Node.IsValid()) E.Node->Destroy();
-			E.Node = nullptr;
+			E.Node.Reset();
 		}
 }
 
@@ -311,7 +311,7 @@ void ADSGame::EmblemsUpdate(float Dt)
 		else if (D > 120.f && E.Node.IsValid())
 		{
 			E.Node->Destroy();
-			E.Node = nullptr;
+			E.Node.Reset();
 		}
 		if (E.Node.IsValid())
 			E.Node->SetActorLocationAndRotation(P3(E.Pos, 0.75f + FMath::Sin(Time * 1.6f + i) * 0.08f), FRotator(0, FMath::RadiansToDegrees(Time * 1.4f + i), 0));
@@ -319,7 +319,7 @@ void ADSGame::EmblemsUpdate(float Dt)
 		{
 			EmblemsFound.Add(i);
 			if (E.Node.IsValid()) E.Node->Destroy();
-			E.Node = nullptr;
+			E.Node.Reset();
 			Burst(E.Pos, 20, FLinearColor(0.95f, 0.82f, 0.48f), 7.f, 1.f);
 			Sfx(TEXT("chime"), -1.f, 1.15f);
 			Float(P3(E.Pos, 1.8f), FString::Printf(TEXT("ASHEN EMBLEM  %d / 12"), EmblemsFound.Num()), FLinearColor(0.95f, 0.82f, 0.48f));

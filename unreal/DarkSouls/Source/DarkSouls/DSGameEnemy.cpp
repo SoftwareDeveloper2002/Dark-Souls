@@ -353,7 +353,7 @@ void ADSGame::KillEnemy(FDSEnemyPtr E, bool bReward)
 			FDSOrb O;
 			O.Node = MakeBall(0.28f, FLinearColor(0.95f, 0.82f, 0.48f) * 3.f);
 			O.Pos = P3(E->Pos, 0.8f);
-			O.Vel = FVector(FMath::FRandRange(-2, 2), FMath::FRandRange(-2, 2), FMath::FRandRange(3, 5)) * 100.0;
+			O.Vel = FVector(FMath::FRandRange(-2.f, 2.f), FMath::FRandRange(-2.f, 2.f), FMath::FRandRange(3.f, 5.f)) * 100.0;
 			OrbsList.Add(O);
 		}
 		if (WeaponsOwned[(int32)EDSWeapon::Gun] && (FMath::FRand() < 0.2f || E->bBoss))
@@ -362,7 +362,7 @@ void ADSGame::KillEnemy(FDSEnemyPtr E, bool bReward)
 			O.bAmmo = true;
 			O.Node = MakeBall(0.36f, FLinearColor(0.54f, 0.85f, 1.f) * 3.f);
 			O.Pos = P3(E->Pos + FVector2D(0.6f, 0.4f), 0.8f);
-			O.Vel = FVector(FMath::FRandRange(-2, 2), FMath::FRandRange(-2, 2), FMath::FRandRange(3, 5)) * 100.0;
+			O.Vel = FVector(FMath::FRandRange(-2.f, 2.f), FMath::FRandRange(-2.f, 2.f), FMath::FRandRange(3.f, 5.f)) * 100.0;
 			OrbsList.Add(O);
 		}
 		if (E->bQuest)
