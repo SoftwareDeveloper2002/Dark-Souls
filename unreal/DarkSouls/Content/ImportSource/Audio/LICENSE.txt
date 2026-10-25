@@ -1,0 +1,3 @@
+rain_loop.ogg  - "Rain (loopable)" 1.ogg by Ylmir, CC0, crossfaded into a seamless loop
+thunder_*.ogg  - cut from "Rain + Long Thunder" by WuxiaScrub, CC0
+Both from https://opengameart.org

@@ -1,0 +1,6 @@
+Landscape > Import from File
+  Heightmap file : dark_souls_heightmap_1009x3025.r16 (16-bit little endian)
+  Resolution     : 1009 x 3025  (63 quads/section, 1 section/component)
+  Location       : X=0, Y=-204800, Z=0   (so world metres match the Godot map: x 0..1024, z -2048..1024)
+  Scale          : X=101.5873, Y=101.5873, Z=150.0000
+Heights are in metres in the game's coordinates; ground level 0 = Godot y 0.

@@ -1,0 +1,15 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.5",
+	"Category": "",
+	"Description": "Dark Souls mobile game - Unreal Engine 5 port of the Godot project",
+	"Modules": [
+		{
+			"Name": "DarkSouls",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"AdditionalDependencies": [ "Engine" ]
+		}
+	],
+	"Plugins": []
+}
