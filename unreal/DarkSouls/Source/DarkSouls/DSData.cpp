@@ -2,7 +2,6 @@
 
 #include "DSRoute.inc"
 
-using E = EDSEnemy;
 
 namespace
 {
@@ -100,10 +99,10 @@ namespace
 	};
 
 	const FDSChapter GChapters[] = {
-		{ TEXT("THE ASHEN GATE"), TEXT("CHAPTER I"), E::Demon, FLinearColor(0.03f, 0.04f, 0.09f), FLinearColor(0.28f, 0.32f, 0.5f), FLinearColor(0.6f, 0.7f, 1.0f), 0.9f, 9.f, 18.f, 220 },
-		{ TEXT("THE SUNKEN CRYPT"), TEXT("CHAPTER II"), E::Serpent, FLinearColor(0.02f, 0.07f, 0.06f), FLinearColor(0.22f, 0.42f, 0.36f), FLinearColor(0.5f, 0.95f, 0.8f), 0.8f, 8.f, 15.f, 300 },
-		{ TEXT("THE WAILING KEEP"), TEXT("CHAPTER III"), E::Cyborg, FLinearColor(0.06f, 0.07f, 0.12f), FLinearColor(0.4f, 0.46f, 0.62f), FLinearColor(0.8f, 0.88f, 1.0f), 1.0f, 6.f, 12.f, 420 },
-		{ TEXT("THE DARK CITADEL"), TEXT("CHAPTER IV"), E::Malakar, FLinearColor(0.1f, 0.02f, 0.03f), FLinearColor(0.4f, 0.2f, 0.24f), FLinearColor(0.95f, 0.5f, 0.45f), 0.85f, 4.f, 9.f, 520 },
+		{ TEXT("THE ASHEN GATE"), TEXT("CHAPTER I"), EDSEnemy::Demon, FLinearColor(0.03f, 0.04f, 0.09f), FLinearColor(0.28f, 0.32f, 0.5f), FLinearColor(0.6f, 0.7f, 1.0f), 0.9f, 9.f, 18.f, 220 },
+		{ TEXT("THE SUNKEN CRYPT"), TEXT("CHAPTER II"), EDSEnemy::Serpent, FLinearColor(0.02f, 0.07f, 0.06f), FLinearColor(0.22f, 0.42f, 0.36f), FLinearColor(0.5f, 0.95f, 0.8f), 0.8f, 8.f, 15.f, 300 },
+		{ TEXT("THE WAILING KEEP"), TEXT("CHAPTER III"), EDSEnemy::Cyborg, FLinearColor(0.06f, 0.07f, 0.12f), FLinearColor(0.4f, 0.46f, 0.62f), FLinearColor(0.8f, 0.88f, 1.0f), 1.0f, 6.f, 12.f, 420 },
+		{ TEXT("THE DARK CITADEL"), TEXT("CHAPTER IV"), EDSEnemy::Malakar, FLinearColor(0.1f, 0.02f, 0.03f), FLinearColor(0.4f, 0.2f, 0.24f), FLinearColor(0.95f, 0.5f, 0.45f), 0.85f, 4.f, 9.f, 520 },
 	};
 
 	const TCHAR* GTitles[] = {
@@ -122,10 +121,10 @@ namespace
 
 	TArrayView<const FPoolEntry> Pool(int32 Ch)
 	{
-		static const FPoolEntry P0[] = { { E::Hollow, 5, 1 }, { E::Zombie, 4, 1 }, { E::Imp, 2, 3 }, { E::Archer, 2, 4 }, { E::Hound, 1, 6 } };
-		static const FPoolEntry P1[] = { { E::Skeleton, 5, 1 }, { E::Zombie, 3, 1 }, { E::Ghoul, 3, 2 }, { E::Hound, 3, 3 }, { E::Archer, 2, 1 }, { E::Knight, 1, 6 } };
-		static const FPoolEntry P2[] = { { E::Mage, 3, 1 }, { E::StoneSoldier, 3, 1 }, { E::Fiend, 2, 2 }, { E::Imp, 3, 1 }, { E::Knight, 2, 3 }, { E::Hound, 2, 2 }, { E::Ghoul, 2, 4 } };
-		static const FPoolEntry P3[] = { { E::Knight, 3, 1 }, { E::Fiend, 3, 1 }, { E::Brute, 2, 2 }, { E::Mage, 3, 1 }, { E::Skeleton, 2, 1 }, { E::Ghoul, 2, 1 }, { E::Hound, 2, 2 }, { E::Imp, 2, 1 } };
+		static const FPoolEntry P0[] = { { EDSEnemy::Hollow, 5, 1 }, { EDSEnemy::Zombie, 4, 1 }, { EDSEnemy::Imp, 2, 3 }, { EDSEnemy::Archer, 2, 4 }, { EDSEnemy::Hound, 1, 6 } };
+		static const FPoolEntry P1[] = { { EDSEnemy::Skeleton, 5, 1 }, { EDSEnemy::Zombie, 3, 1 }, { EDSEnemy::Ghoul, 3, 2 }, { EDSEnemy::Hound, 3, 3 }, { EDSEnemy::Archer, 2, 1 }, { EDSEnemy::Knight, 1, 6 } };
+		static const FPoolEntry P2[] = { { EDSEnemy::Mage, 3, 1 }, { EDSEnemy::StoneSoldier, 3, 1 }, { EDSEnemy::Fiend, 2, 2 }, { EDSEnemy::Imp, 3, 1 }, { EDSEnemy::Knight, 2, 3 }, { EDSEnemy::Hound, 2, 2 }, { EDSEnemy::Ghoul, 2, 4 } };
+		static const FPoolEntry P3[] = { { EDSEnemy::Knight, 3, 1 }, { EDSEnemy::Fiend, 3, 1 }, { EDSEnemy::Brute, 2, 2 }, { EDSEnemy::Mage, 3, 1 }, { EDSEnemy::Skeleton, 2, 1 }, { EDSEnemy::Ghoul, 2, 1 }, { EDSEnemy::Hound, 2, 2 }, { EDSEnemy::Imp, 2, 1 } };
 		switch (FMath::Clamp(Ch, 0, 3))
 		{
 		case 0: return TArrayView<const FPoolEntry>(P0, UE_ARRAY_COUNT(P0));

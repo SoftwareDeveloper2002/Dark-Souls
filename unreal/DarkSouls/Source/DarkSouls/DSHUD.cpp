@@ -3,6 +3,7 @@
 #include "DSPlayerController.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
+#include "Engine/Texture2D.h"
 #include "Kismet/GameplayStatics.h"
 
 namespace
@@ -50,6 +51,7 @@ void ADSHUD::DrawHUD()
 	Super::DrawHUD();
 	if (!G) G = Cast<ADSGame>(UGameplayStatics::GetActorOfClass(this, ADSGame::StaticClass()));
 	if (!G || !Canvas) return;
+	G->Buttons.Reset();                    // rebuilt below; kept until the next draw so touch input can hit-test it
 	VW = Canvas->SizeX;
 	VH = Canvas->SizeY;
 	S = VH / 720.f;

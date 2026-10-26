@@ -1,5 +1,6 @@
 #include "DSPlayerController.h"
 #include "DSGame.h"
+#include "Camera/CameraActor.h"
 #include "Components/InputComponent.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"

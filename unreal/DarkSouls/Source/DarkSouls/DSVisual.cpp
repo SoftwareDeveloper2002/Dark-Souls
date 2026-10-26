@@ -5,6 +5,38 @@
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Engine/SkeletalMesh.h"
+#include "AssetRegistry/AssetRegistryModule.h"
+
+// Finds an imported mesh: any static / skeletal mesh whose package path has `Key` as a folder or file name under /Game/Models/<Folder>.
+static UObject* DSFindModel(const FString& Folder, const FString& Key)
+{
+	static TMap<FString, TWeakObjectPtr<UObject>> Cache;
+	const FString Id = Folder + TEXT("/") + Key;
+	if (TWeakObjectPtr<UObject>* Hit = Cache.Find(Id))
+		if (Hit->IsValid()) return Hit->Get();
+
+	FAssetRegistryModule& Reg = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+	TArray<FAssetData> Assets;
+	Reg.Get().GetAssetsByPath(FName(*(TEXT("/Game/Models/") + Folder)), Assets, true);
+	const FString Seg = TEXT("/") + Key.ToLower();
+	UObject* Best = nullptr;
+	for (const FAssetData& A : Assets)
+	{
+		const bool bSkel = A.AssetClassPath == USkeletalMesh::StaticClass()->GetClassPathName();
+		const bool bStat = A.AssetClassPath == UStaticMesh::StaticClass()->GetClassPathName();
+		if (!bSkel && !bStat) continue;
+		const FString Pkg = A.PackageName.ToString().ToLower();
+		if (!(Pkg.Contains(Seg + TEXT("/")) || Pkg.EndsWith(Seg))) continue;
+		if (UObject* O = A.GetAsset())
+		{
+			if (!Best || bSkel) Best = O;        // prefer the skinned mesh when a file produced both
+		}
+	}
+	if (Best) Cache.Add(Id, Best);
+	return Best;
+}
 
 ADSVisual::ADSVisual()
 {
@@ -42,6 +74,47 @@ int32 ADSVisual::AddPart(EDSShape Shape, const FVector& LocalMetres, const FVect
 	Mats.Add(M);
 	BaseColors.Add(Color);
 	return Parts.Num() - 1;
+}
+
+bool ADSVisual::AttachModel(const FString& Folder, const FString& Key, float HeightMetres, const TArray<int32>& HidePrimitives, float YawOffsetDeg)
+{
+	UObject* Asset = DSFindModel(Folder, Key);
+	if (!Asset) return false;
+
+	FBoxSphereBounds Bounds;
+	UMeshComponent* MC = nullptr;
+	if (USkeletalMesh* SK = Cast<USkeletalMesh>(Asset))
+	{
+		USkeletalMeshComponent* C = NewObject<USkeletalMeshComponent>(this);
+		C->SetSkeletalMesh(SK);
+		C->SetAnimationMode(EAnimationMode::AnimationSingleNode);   // no animation asset: stays in its rest pose, the actor itself leans / swings
+		Bounds = SK->GetBounds();
+		MC = C;
+	}
+	else if (UStaticMesh* SM = Cast<UStaticMesh>(Asset))
+	{
+		UStaticMeshComponent* C = NewObject<UStaticMeshComponent>(this);
+		C->SetStaticMesh(SM);
+		Bounds = SM->GetBounds();
+		MC = C;
+	}
+	if (!MC) return false;
+
+	MC->SetMobility(EComponentMobility::Movable);
+	MC->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	MC->SetCastShadow(bShadows);
+	MC->SetupAttachment(Pivot);
+	MC->RegisterComponent();
+	// scale to the requested height (the importer gives centimetres), stand it on the ground and turn it to face +X
+	const float HeightCm = FMath::Max(Bounds.BoxExtent.Z * 2.f, 1.f);
+	const float S = (HeightMetres * 100.f) / HeightCm;
+	MC->SetRelativeScale3D(FVector(S));
+	MC->SetRelativeLocation(FVector(0.f, 0.f, -(Bounds.Origin.Z - Bounds.BoxExtent.Z) * S));
+	MC->SetRelativeRotation(FRotator(0.f, YawOffsetDeg, 0.f));
+	Model = MC;
+	for (int32 I : HidePrimitives)
+		if (Parts.IsValidIndex(I) && Parts[I]) Parts[I]->SetVisibility(false);
+	return true;
 }
 
 void ADSVisual::SetPartColor(int32 I, const FLinearColor& Col)
@@ -99,6 +172,23 @@ UInstancedStaticMeshComponent* ADSVisual::AddInstanced(EDSShape Shape, const FLi
 		M->SetVectorParameterValue(TEXT("Color"), Color);
 		C->SetMaterial(0, M);
 	}
+	return C;
+}
+
+UInstancedStaticMeshComponent* ADSVisual::AddInstancedModel(const FString& Folder, const FString& Key, float& OutHeightM, float& OutBaseM)
+{
+	UStaticMesh* SM = Cast<UStaticMesh>(DSFindModel(Folder, Key));
+	if (!SM) return nullptr;
+	const FBoxSphereBounds B = SM->GetBounds();
+	OutHeightM = FMath::Max(B.BoxExtent.Z * 2.f, 1.f) / 100.f;
+	OutBaseM = (B.Origin.Z - B.BoxExtent.Z) / 100.f;
+	UInstancedStaticMeshComponent* C = NewObject<UInstancedStaticMeshComponent>(this);
+	C->SetMobility(EComponentMobility::Movable);
+	C->SetStaticMesh(SM);
+	C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	C->SetCastShadow(false);
+	C->SetupAttachment(Pivot);
+	C->RegisterComponent();
 	return C;
 }
 

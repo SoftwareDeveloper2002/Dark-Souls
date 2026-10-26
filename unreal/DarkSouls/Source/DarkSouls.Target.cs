@@ -8,6 +8,7 @@ public class DarkSoulsTarget : TargetRules
 		Type = TargetType.Game;
 		DefaultBuildSettings = BuildSettingsVersion.V5;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_5;
+		ShadowVariableWarningLevel = WarningLevel.Off;   // the port reuses short local names (E, Q, S); keep them warnings-free
 		ExtraModuleNames.Add("DarkSouls");
 	}
 }

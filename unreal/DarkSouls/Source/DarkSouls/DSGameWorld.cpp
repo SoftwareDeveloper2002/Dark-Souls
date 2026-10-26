@@ -327,6 +327,7 @@ void ADSGame::BuildMaze(const FVector2D& Center, const FVector2D& Travel)
 		V->AddPart(EDSShape::Cube, FVector(0, 0, 0.84), FVector(1.3, 0.85, 0.28), FLinearColor(0.85f, 0.69f, 0.31f));            // 1 lid
 		V->AddPart(EDSShape::Cylinder, FVector(0, 0, 11.0), FVector(Ch.Kind == 0 ? 0.7 : 0.45, Ch.Kind == 0 ? 0.7 : 0.45, 22.0),
 			Ch.Kind == 0 ? FLinearColor(1.f, 0.85f, 0.4f) * 2.f : FLinearColor(0.7f, 0.85f, 1.f));                                // 2 light beam
+		V->AttachModel(TEXT("Props"), TEXT("treasure_chest"), 0.9f, { 0, 1 });
 		V->SetShadows(false);
 		Ch.Node = V;
 		Maze.Chests.Add(Ch);
@@ -850,6 +851,11 @@ void ADSGame::MakeForestChunk(int32 Cx, int32 Cy)
 	UInstancedStaticMeshComponent* Trunk = V->AddInstanced(EDSShape::Cylinder, FLinearColor(0.16f, 0.1f, 0.06f));
 	UInstancedStaticMeshComponent* Leaf = V->AddInstanced(EDSShape::Cone, FLinearColor(0.04f, 0.13f, 0.07f));
 	UInstancedStaticMeshComponent* Bush = V->AddInstanced(EDSShape::Sphere, FLinearColor(0.06f, 0.16f, 0.07f));
+	// real pine trees when imported (two kinds); the primitive trunk + cone below is the fallback
+	float PineH[2] = { 1.f, 1.f }, PineBase[2] = { 0.f, 0.f };
+	UInstancedStaticMeshComponent* Pines[2] = {
+		V->AddInstancedModel(TEXT("Forest"), TEXT("pine_1"), PineH[0], PineBase[0]),
+		V->AddInstancedModel(TEXT("Forest"), TEXT("pine_2"), PineH[1], PineBase[1]) };
 	const float Step = 3.7f;
 	const int32 Cnt = (int32)(Chunk / Step);
 	for (int32 Gx = 0; Gx < Cnt; Gx++)
@@ -864,8 +870,16 @@ void ADSGame::MakeForestChunk(int32 Cx, int32 Cy)
 			const float H = Ground(P);
 			if (FMath::Abs(Ground(P + FVector2D(1.6, 0)) - H) > 2.3f || FMath::Abs(Ground(P + FVector2D(0, 1.6)) - H) > 2.3f) continue;
 			const bool bDead = Kind < 0.06f;
-			ADSVisual::AddInstance(Trunk, FVector(P.X * 100.0, P.Y * 100.0, (H + 1.6f * S) * 100.0), FVector(0.55 * S, 0.55 * S, 3.2 * S), Yaw);
-			if (!bDead)
+			const int32 Pk = (Bx < 0.5f) ? 0 : 1;
+			const bool bPine = !bDead && Pines[Pk] != nullptr;
+			if (bPine)
+			{
+				const float K = (9.0f * S) / PineH[Pk];       // a pine is about 9 m tall
+				ADSVisual::AddInstance(Pines[Pk], FVector(P.X * 100.0, P.Y * 100.0, (H - PineBase[Pk] * K) * 100.0), FVector(K), Yaw);
+			}
+			else
+				ADSVisual::AddInstance(Trunk, FVector(P.X * 100.0, P.Y * 100.0, (H + 1.6f * S) * 100.0), FVector(0.55 * S, 0.55 * S, 3.2 * S), Yaw);
+			if (!bDead && !bPine)
 			{
 				ADSVisual::AddInstance(Leaf, FVector(P.X * 100.0, P.Y * 100.0, (H + 4.6f * S) * 100.0), FVector(2.8 * S, 2.8 * S, 6.5 * S), Yaw);
 				if (Bx < 0.55f)

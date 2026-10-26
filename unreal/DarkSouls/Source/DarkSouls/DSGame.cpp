@@ -195,11 +195,12 @@ void ADSGame::BuildWorld()
 	const FVector A(Start.X * 100.0, Start.Y * 100.0, 3000000.0), B(Start.X * 100.0, Start.Y * 100.0, -3000000.0);
 	if (!W->LineTraceSingleByChannel(Hit, A, B, ECC_Visibility))
 	{
-		UStaticMesh* Plane = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane"));
-		AStaticMeshActor* Floor = W->SpawnActor<AStaticMeshActor>(FVector(512 * 100.0, -800 * 100.0, 0), FRotator::ZeroRotator, Sp);
+		// a slab, not the engine Plane: the Plane mesh has no collision, so the ground traces would never hit it
+		UStaticMesh* Slab = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+		AStaticMeshActor* Floor = W->SpawnActor<AStaticMeshActor>(FVector(512 * 100.0, -800 * 100.0, -50.0), FRotator::ZeroRotator, Sp);
 		Floor->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
-		Floor->GetStaticMeshComponent()->SetStaticMesh(Plane);
-		Floor->SetActorScale3D(FVector(6000.0, 6000.0, 1.0));   // 6 km square
+		Floor->GetStaticMeshComponent()->SetStaticMesh(Slab);
+		Floor->SetActorScale3D(FVector(6000.0, 6000.0, 1.0));   // 6 km square, 1 m thick, top face at z = 0
 		Floor->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
 		if (UMaterialInterface* Base = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial")))
 		{
@@ -303,8 +304,8 @@ void ADSGame::UpdateCamera(float Dt)
 		float Reach = 0.f;
 		while (Reach < Dist)
 		{
-			const FVector Q = Head + Dirn * Reach;
-			if (WallOnly(FVector2D(Q.X, Q.Y) / 100.0, 0.55f)) break;
+			const FVector Probe = Head + Dirn * Reach;
+			if (WallOnly(FVector2D(Probe.X, Probe.Y) / 100.0, 0.55f)) break;
 			Reach += 25.f;
 		}
 		const FVector TpPos = Head + Dirn * FMath::Max(Reach - 35.f, 90.f);
@@ -328,7 +329,6 @@ void ADSGame::Tick(float Dt)
 {
 	Super::Tick(Dt);
 	Dt = FMath::Min(Dt, 0.05f);
-	Buttons.Reset();                       // the HUD re-registers them while drawing this frame (see ADSHUD::DrawHUD)
 	Time += Dt;
 	MapBuildStep();
 	WeatherUpdate(Dt);
@@ -570,6 +570,8 @@ void ADSGame::BuildPlayerFigure()
 	PlayerFig->AddPart(EDSShape::Sphere, FVector(0.25, 0, 1.78), FVector(0.14, 0.3, 0.1), FLinearColor(0.9f, 0.4f, 0.1f)); // 4 visor glow
 	PlayerFig->AddPart(EDSShape::Cylinder, FVector(0.6, 0.35, 1.1), FVector(0.09, 0.09, 1.0), FLinearColor(0.23f, 0.15f, 0.09f));   // 5 torch stick
 	PlayerFig->AddPart(EDSShape::Cone, FVector(0.6, 0.35, 1.75), FVector(0.3, 0.3, 0.5), FLinearColor(1.f, 0.65f, 0.2f) * 5.f);         // 6 flame
+	// the imported hero (body / head / visor hidden; sword, shield and torch stay as the game animates them)
+	PlayerFig->AttachModel(TEXT("Characters"), TEXT("hero"), 1.9f, { 0, 1, 4 });
 	PlayerFig->SetActorHiddenInGame(true);
 }
 
@@ -599,6 +601,7 @@ ADSVisual* ADSGame::BuildFigure(EDSEnemy Type)
 		V->AddPart(EDSShape::Cube, FVector(0, 0, 0.7), FVector(1.5, 0.7, 0.7), Col);
 		V->AddPart(EDSShape::Sphere, FVector(0.9, 0, 0.9), FVector(0.55), Col * 1.2f);
 		V->AddPart(EDSShape::Sphere, FVector(1.15, 0.12, 0.98), FVector(0.1), FLinearColor(1.f, 0.3f, 0.1f) * 4.f);
+		V->AttachModel(TEXT("Characters"), TEXT("hound"), 1.1f, { 0, 1, 2 });   // body, head, eye
 		return V;
 	}
 	V->AddPart(EDSShape::Cylinder, FVector(0, 0, 0.95 * Hs), FVector(0.62 * S, 0.62 * S, 1.0 * Hs), Col);                    // 0 body
@@ -607,6 +610,10 @@ ADSVisual* ADSGame::BuildFigure(EDSEnemy Type)
 	const bool bBossLike = C.AI == EDSAI::Boss;
 	V->AddPart(EDSShape::Sphere, FVector(0.3 * S, 0, 1.8 * Hs + 0.1 * S), FVector(0.15 * S, 0.34 * S, 0.1 * S),
 		bBossLike ? FLinearColor(1.f, 0.3f, 0.1f) * 5.f : FLinearColor(1.f, 0.7f, 0.2f) * 3.f);                                // 3 eyes
+	static const TCHAR* Keys[] = { TEXT("hollow"), TEXT("zombie"), TEXT("ghoul"), TEXT("skeleton"), TEXT("archer"), TEXT("mage"), TEXT("imp"), TEXT("fiend"),
+		TEXT("hound"), TEXT("knight"), TEXT("stonesoldier"), TEXT("brute"), TEXT("captain"), TEXT("demon"), TEXT("serpent"), TEXT("cyborg"), TEXT("malakar") };
+	if ((int32)Type < UE_ARRAY_COUNT(Keys) && Type != EDSEnemy::Cyborg)
+		V->AttachModel(TEXT("Characters"), Keys[(int32)Type], 1.85f * Hs, { 0, 1, 3 });   // body, head and eyes: the model replaces them
 	if (C.bShield) V->AddPart(EDSShape::Cube, FVector(0.45 * S, -0.55 * S, 1.1 * Hs), FVector(0.12, 0.65 * S, 0.85 * S), FLinearColor(0.3f, 0.3f, 0.35f));
 	if (Type == EDSEnemy::Cyborg)
 	{

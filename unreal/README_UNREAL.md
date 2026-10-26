@@ -74,3 +74,11 @@ Sounds are looked up by name at runtime, and silently skipped when missing:
 ## Mobile notes
 
 `Config/DefaultEngine.ini` targets Android (arm64, Vulkan, min SDK 29) and iOS 15, landscape only, forward shading, mobile HDR off. Set the package name, signing and icons under *Project Settings > Platforms* before shipping.
+
+## Models and music (copied from the Godot game)
+
+`Content/ImportSource/Models` holds the real art as `.glb`: `Characters/` (hero, hound, every enemy and boss body, princess, villagers, imp, wolf, heart), `Props/` (polyhaven props, tent, rocks, heavy greatsword) and `Forest/` (pine trees with LOD levels). `Content/ImportSource/Audio/Music` and `Audio/Vox` hold the music and the voice lines.
+
+Import them all once with `unreal/tools/import_assets.py` (see the header of that file). They land in `/Game/Models/...` and `/Game/Audio/...`. The game now dresses the hero, the hound and every humanoid enemy in their imported model through `ADSVisual::AttachModel` (called from `BuildPlayerFigure` / `BuildFigure`): it searches `/Game/Models/Characters` for an asset named after the character (`hero`, `zombie`, ...), scales it to the figure's height and hides the primitive body / head. If a model has not been imported the figure stays as primitives, so nothing breaks. Skinned bodies stand in their rest pose; the actor still leans, swings and falls procedurally. Not yet compiled or run (no Unreal install was available); if a model faces sideways change the `YawOffsetDeg` argument of `AttachModel`.
+
+The same lookup now dresses the camp tents (`medieval_tent`), camp rocks and boss standing stones (`RockA/B/C`), the bonfire (`stone_fire_pit`), the labyrinth chests (`treasure_chest`) and the forest (instanced `pine_1` / `pine_2` from `/Game/Models/Forest`). Music, voices and sound effects were already loaded from `/Game/Audio/Music`, `/Vox` and `/Sfx`, which the import script fills. Every one of them falls back to the old primitive when its asset is missing. Chest lids no longer swing when an imported chest model is used (the lid animation drives the hidden primitive).

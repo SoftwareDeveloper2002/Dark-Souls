@@ -341,6 +341,7 @@ void ADSGame::BuildBonfire(const FVector2D& At)
 	V->AddPart(EDSShape::Cylinder, FVector(0, 0, 0.2), FVector(1.4, 1.4, 0.4), FLinearColor(0.25f, 0.23f, 0.2f));
 	V->AddPart(EDSShape::Cube, FVector(0, 0, 0.6), FVector(0.15, 0.15, 1.1), FLinearColor(0.7f, 0.7f, 0.65f));    // the coiled sword
 	V->AddPart(EDSShape::Cone, FVector(0, 0, 0.9), FVector(0.8, 0.8, 1.4), FLinearColor(1.f, 0.5f, 0.1f) * 3.f);   // flame
+	V->AttachModel(TEXT("Props"), TEXT("stone_fire_pit"), 0.5f, { 0 });
 	V->SetShadows(false);
 	CampProps.Add(V);
 	if (APointLight* L = GetWorld()->SpawnActor<APointLight>(P3(At, 1.5f), FRotator::ZeroRotator))
@@ -363,6 +364,7 @@ void ADSGame::BuildCamp(const FVector2D& C, int32 Ch, bool bBoss)
 		const FVector2D P = C + FromAngle(A) * 10.f;
 		ADSVisual* T = GetWorld()->SpawnActor<ADSVisual>(P3(P), FRotator(0, FMath::RadiansToDegrees(A) + 90.f, 0));
 		T->AddPart(EDSShape::Cone, FVector(0, 0, 1.3), FVector(3.4, 3.4, 2.6), Faction[Ch]);
+		T->AttachModel(TEXT("Props"), TEXT("medieval_tent"), 3.0f, { 0 });
 		CampProps.Add(T);
 	}
 	CampTents.Reset();
@@ -373,6 +375,8 @@ void ADSGame::BuildCamp(const FVector2D& C, int32 Ch, bool bBoss)
 		const FVector2D Rp = C + FromAngle(i * 2.2f + 1.f) * 7.f;
 		ADSVisual* Rk = GetWorld()->SpawnActor<ADSVisual>(P3(Rp), FRotator::ZeroRotator);
 		Rk->AddPart(EDSShape::Sphere, FVector(0, 0, 0.5), FVector(1.6, 1.3, 1.1), FLinearColor(0.3f, 0.3f, 0.32f));
+		static const TCHAR* RockNames[] = { TEXT("RockA"), TEXT("RockB"), TEXT("RockC") };
+		Rk->AttachModel(TEXT("Props"), RockNames[i % 3], 1.5f, { 0 });
 		CampProps.Add(Rk);
 		CampRocks.Add(Rp);
 	}
@@ -384,6 +388,8 @@ void ADSGame::BuildCamp(const FVector2D& C, int32 Ch, bool bBoss)
 			const float A = (float)i / 24.f * 2.f * PI;
 			ADSVisual* S = GetWorld()->SpawnActor<ADSVisual>(P3(C + FromAngle(A) * ArenaR), FRotator::ZeroRotator);
 			S->AddPart(EDSShape::Cube, FVector(0, 0, 2.0), FVector(1.5, 1.5, 4.0 + (i % 3)), FLinearColor(0.26f, 0.27f, 0.3f));
+			static const TCHAR* StoneNames[] = { TEXT("RockA"), TEXT("RockB"), TEXT("RockC") };
+			S->AttachModel(TEXT("Props"), StoneNames[i % 3], 4.5f + (i % 3), { 0 });
 			CampProps.Add(S);
 		}
 	}

@@ -36,6 +36,8 @@ public:
 
 	/** One draw call for many copies of a primitive (walls, trees). Add copies with AddInstance. */
 	UInstancedStaticMeshComponent* AddInstanced(EDSShape Shape, const FLinearColor& Color);
+	/** Same, but with an imported static mesh (null when it has not been imported). OutHeightM = the mesh's height in metres, OutBaseM = how far its lowest point is below its origin. */
+	UInstancedStaticMeshComponent* AddInstancedModel(const FString& Folder, const FString& Key, float& OutHeightM, float& OutBaseM);
 	static void AddInstance(UInstancedStaticMeshComponent* C, const FVector& WorldCm, const FVector& ScaleMetres, float YawRad);
 
 	UStaticMeshComponent* GetPart(int32 I) const { return Parts.IsValidIndex(I) ? Parts[I] : nullptr; }
@@ -45,6 +47,13 @@ public:
 	void SetShadows(bool bOn);
 	void SetCollisionOff();
 
+	/**
+	 * Dresses the figure in an imported model (see unreal/tools/import_assets.py). Looks under /Game/Models/<Folder> for the asset named Key
+	 * (static or skeletal mesh), scales it to HeightMetres and hides the primitive parts listed in HidePrimitives.
+	 * Returns false (and changes nothing) when the model has not been imported, so the game still works from primitives.
+	 */
+	bool AttachModel(const FString& Folder, const FString& Key, float HeightMetres, const TArray<int32>& HidePrimitives, float YawOffsetDeg = 0.f);
+
 	/** Sim position (metres, game plane) + height above ground (metres) + facing angle (radians, 0 = +X). */
 	void Place(const FVector& WorldCm, float FacingRad);
 
@@ -52,6 +61,7 @@ private:
 	UPROPERTY() TObjectPtr<USceneComponent> Pivot;
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Parts;
 	UPROPERTY() TArray<TObjectPtr<UMaterialInstanceDynamic>> Mats;
+	UPROPERTY() TObjectPtr<USceneComponent> Model;
 	TArray<FLinearColor> BaseColors;
 	bool bFlash = false;
 	bool bShadows = true;
