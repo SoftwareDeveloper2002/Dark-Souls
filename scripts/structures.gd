@@ -467,6 +467,7 @@ func _build_maze_body(center: Vector2, travel: Vector2) -> void:
 			await g.get_tree().process_frame
 	maze = {"center": center, "origin": origin, "cell": cell, "n": n, "entrance": cpos_of.call(entrance_cell), "exit": cpos_of.call(exit_cell),
 		"chests": chests, "dead": dead.map(func(c): return cpos_of.call(c)), "root": root, "grp": grp, "civ_spots": civ_spots, "size": size}
+	g.emblems.maze_built(maze)
 
 
 func _make_chest(parent: Node3D, pos: Vector2, kind: String) -> Dictionary:

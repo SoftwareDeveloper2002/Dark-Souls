@@ -111,6 +111,26 @@ func add_disc(pos: Vector2, radius: float) -> void:
 
 # ------------------------------------------------------------------ collision
 
+## The trunk closest to `p` (within `reach`), or Vector2.INF when the surrounding chunks have none.
+func nearest_tree(p: Vector2, reach: float) -> Vector2:
+	var best := Vector2.INF
+	var bd := reach * reach
+	var cr := ceili(reach / 6.0)
+	var cx := floori(p.x / 6.0)
+	var cz := floori(p.y / 6.0)
+	for dx in range(-cr, cr + 1):
+		for dz in range(-cr, cr + 1):
+			var arr = _trunks.get(Vector2i(cx + dx, cz + dz))
+			if arr == null:
+				continue
+			for t in arr:
+				var d: float = (p.x - t.x) * (p.x - t.x) + (p.y - float(t.y)) * (p.y - float(t.y))
+				if d < bd:
+					bd = d
+					best = Vector2(t.x, t.y)
+	return best
+
+
 func blocks(p: Vector2, rad: float) -> bool:
 	var cx := floori(p.x / 6.0)
 	var cz := floori(p.y / 6.0)

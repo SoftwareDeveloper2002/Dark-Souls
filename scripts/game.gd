@@ -807,7 +807,11 @@ func _make_tent(p: Vector2, yaw: float, faction: Color, parent: Node3D) -> void:
 
 
 ## Camp / outpost for a quest site: bonfire, tents, crates, banners, rocks (+ arena ring for bosses).
+var last_camp := {"tents": [], "rocks": []}  # what the latest camp is made of (the emblem hunt hides things at its tent / rocks)
+
+
 func _build_camp(c: Vector2, ch: int, boss: bool) -> Node3D:
+	last_camp = {"tents": [], "rocks": []}
 	var root := _make_bonfire(c, true)
 	var cloth := _mat(Color(CH_COLORS[ch]).darkened(0.35), 0.95)
 	cloth.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -820,6 +824,7 @@ func _build_camp(c: Vector2, ch: int, boss: bool) -> Node3D:
 		if structures.wall_hit(p, 2.0):
 			continue
 		_make_tent(p, rng.randf() * TAU, Color(CH_COLORS[ch]), root)
+		last_camp.tents.append(p)
 	for i in _cnt(5):
 		var p2 := c + Vector2.from_angle(rng.randf() * TAU) * rng.randf_range(3.5, 9.0)
 		if structures.wall_hit(p2, 1.0):
@@ -882,6 +887,7 @@ func _build_camp(c: Vector2, ch: int, boss: bool) -> Node3D:
 		var p5 := c + Vector2.from_angle(rng.randf() * TAU) * rng.randf_range(11.0, 20.0)
 		if _walk_ok(p5) and not structures.wall_hit(p5, 2.0):
 			_place_model(rocks[rng.randi() % 3], rock_mat, p5, rng.randf_range(0.8, 2.2), rng.randf() * TAU, root)
+			last_camp.rocks.append(p5)
 	if boss:
 		for i in 16:
 			if Settings.quality <= 1 and i % 2 == 1:
@@ -1442,6 +1448,7 @@ func _begin_quest(n: int, intro: bool = true, with_fire: bool = false) -> void:
 
 
 func _free_camp() -> void:
+	emblems.camp_freed()
 	if camp_root != null:
 		camp_root.queue_free()
 		camp_root = null
@@ -1558,6 +1565,7 @@ func _spawn_camp() -> void:
 	if q.kind != "maze" and quest_n != 30:
 		_free_camp()
 		camp_root = _build_camp(site, q.ch, q.kind == "boss")
+		emblems.camp_built(quest_n, site, last_camp)
 	match q.kind:
 		"kill":
 			for i in mini(int(q.target), mini(4 + int(q.ch), Settings.enemy_cap() + 1)):

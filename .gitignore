@@ -7,3 +7,4 @@ build/
 *.jks
 export_credentials.cfg
 ~*
+exports/

@@ -49,51 +49,112 @@ func setup(game: Node3D) -> void:
 	_place()
 
 
-func _valid(p: Vector2) -> bool:
-	if not g._walk_ok(p):
-		return false
-	var h: float = g._h(p)
-	if absf(g._h(p + Vector2(1.5, 0)) - h) > 1.2 or absf(g._h(p + Vector2(0, 1.5)) - h) > 1.2:
-		return false
-	for n in range(1, 41):
-		if p.distance_to(World.site(n)) < 52.0:
-			return false
-	if p.distance_to(World.start()) < 40.0:
-		return false
-	return not g.structures.wall_hit(p, 2.0) and not g.structures.on_bridge(p)
+## Where an emblem can lie: three camps (quests 5, 12, 20) each hide one at the TENT, one at the ROCK nearest the bonfire and one at the TREE
+## nearest the bonfire; the labyrinth hides the last three against walls of its dead ends. A slot only exists (has = true) while the thing it
+## belongs to is standing, i.e. while that quest's camp is up or once the labyrinth is built.
+const CAMP_QUESTS := [5, 12, 20]
+const CAMP_KINDS := ["tent", "rock", "tree"]
 
 
 func _place() -> void:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 5150
-	var n := World.ROUTE.size()
-	var tr := World.tunnel_range()
-	for k in COUNT:
-		var base := 14 + int(float(k) * float(n - 40) / float(COUNT - 1))
-		var spot := Vector2.ZERO
-		var ok := false
-		for attempt in 60:
-			var idx := clampi(base + rng.randi_range(-9, 9), 8, n - 10)
-			if idx >= tr.x - 16 and idx <= tr.y + 16:
-				continue
-			var d := World.dir_at(idx)
-			var nrm := Vector2(-d.y, d.x) * (1.0 if rng.randf() < 0.5 else -1.0)
-			var p: Vector2 = World.ROUTE[idx] + nrm * rng.randf_range(30.0, 64.0)
-			if _valid(p):
-				spot = p
-				ok = true
+	for qn in CAMP_QUESTS:
+		for k in CAMP_KINDS:
+			items.append({"pos": Vector2.INF, "node": null, "live": false, "quest": qn, "src": k})
+	for i in 3:
+		items.append({"pos": Vector2.INF, "node": null, "live": false, "quest": 27, "src": "wall"})
+
+
+## A point `off` metres from `obj` towards `c`, so the emblem sits right beside the thing and never inside it.
+func _beside(obj: Vector2, c: Vector2, off: float) -> Vector2:
+	var dir: Vector2 = (c - obj).normalized() if obj.distance_to(c) > 0.1 else Vector2.RIGHT
+	for extra: float in [0.0, 1.0, 2.0, -1.0]:
+		var p: Vector2 = obj + dir * (off + extra)
+		if g._walk_ok(p):
+			return p
+	return obj + dir * off
+
+
+## Called when a quest's camp has just been built. `info` lists the camp's tents and rocks.
+func camp_built(qn: int, c: Vector2, info: Dictionary) -> void:
+	for it in items:
+		if it.quest != qn or it.src == "wall":
+			continue
+		var obj := Vector2.INF
+		var off := 2.0
+		match it.src:
+			"tent":
+				var tents: Array = info.get("tents", [])
+				if not tents.is_empty():
+					obj = _nearest(tents, c)
+				off = 2.4
+			"rock":
+				var rocks: Array = info.get("rocks", [])
+				if not rocks.is_empty():
+					obj = _nearest(rocks, c)
+				off = 1.9
+			"tree":
+				obj = g.forest.nearest_tree(c, 45.0)
+				off = 1.3
+		if obj == Vector2.INF:
+			# nothing of that kind was built here this time: put it where the thing would stand, at the camp's edge
+			obj = c + Vector2.from_angle(float(CAMP_KINDS.find(it.src)) * 2.1) * 9.0
+		it.pos = _beside(obj, c, off)
+		it.live = true
+
+
+## The camp was torn down: its emblems go with it (collected ones stay collected).
+func camp_freed() -> void:
+	for it in items:
+		if it.src != "wall" and it.live:
+			it.live = false
+			if it.node != null:
+				(it.node as Node).queue_free()
+				it["node"] = null
+
+
+## The labyrinth is finished: three emblems against the walls of far dead ends.
+func maze_built(maze: Dictionary) -> void:
+	var dead: Array = (maze.get("dead", []) as Array).duplicate()
+	var entrance: Vector2 = maze.entrance
+	var civ: Array = maze.get("civ_spots", [])
+	dead = dead.filter(func(d): return d.distance_to(entrance) > 18.0 and not civ.any(func(c): return d.distance_to(c) < 7.0))
+	dead.sort_custom(func(a, b): return a.distance_to(entrance) < b.distance_to(entrance))
+	var picks: Array = []
+	for f in [0.35, 0.65, 0.95]:
+		if dead.is_empty():
+			break
+		picks.append(dead[clampi(int(float(dead.size() - 1) * f), 0, dead.size() - 1)])
+	var slot := 0
+	for it in items:
+		if it.src != "wall":
+			continue
+		if slot >= picks.size():
+			break
+		var cell: Vector2 = picks[slot]
+		slot += 1
+		# hug the wall of the dead end: the side that is closed
+		var best := cell
+		for dir in [Vector2.RIGHT, Vector2.LEFT, Vector2.DOWN, Vector2.UP]:
+			if g.structures.wall_only(cell + dir * float(maze.cell) * 0.5, 0.2):
+				best = cell + dir * 1.5
 				break
-		if not ok:
-			var idx2 := clampi(base, 8, n - 10)
-			spot = World.ROUTE[idx2] + Vector2(-World.dir_at(idx2).y, World.dir_at(idx2).x) * 24.0
-		items.append({"pos": spot, "node": null})
-		g.forest.add_disc(spot, 2.4)  # a small clearing so it can always be reached
+		it.pos = best
+		it.live = true
+
+
+func _nearest(list: Array, c: Vector2) -> Vector2:
+	var best: Vector2 = list[0]
+	for p in list:
+		if (p as Vector2).distance_to(c) < best.distance_to(c):
+			best = p
+	return best
 
 
 func found_positions() -> Array:
 	var out: Array = []
 	for i in found:
-		out.append(items[i].pos)
+		if items[i].pos != Vector2.INF:
+			out.append(items[i].pos)
 	return out
 
 
@@ -185,9 +246,9 @@ func update(dt: float) -> void:
 	_t += dt
 	var hero: Vector2 = g.p_pos
 	for i in items.size():
-		if found.has(i):
-			continue
 		var it: Dictionary = items[i]
+		if found.has(i) or not it.live:
+			continue
 		var d: float = hero.distance_to(it.pos)
 		if d < SHOW_DIST and it.node == null:
 			var nd := _make_node()
@@ -215,7 +276,7 @@ func _collect(i: int) -> void:
 	g.sfx("chime", -1.0, 1.15)
 	g._float(g._p3(it.pos, 1.8), "ASHEN EMBLEM  %d / %d" % [found.size(), COUNT], Color("f2d27a"))
 	if found.size() == 1:
-		g._show_banner("A HIDDEN ASHEN EMBLEM", 4.0, "Eleven more are hidden in the forest...")
+		g._show_banner("A HIDDEN ASHEN EMBLEM", 4.0, "Eleven more lie at camp tents, rocks and trees, and in the labyrinth walls...")
 	elif complete():
 		g.unlimited_ammo = true
 		g._show_banner("THE ASHEN ARSENAL", 5.0, "All 12 emblems found - UNLIMITED AMMO for every gun")
