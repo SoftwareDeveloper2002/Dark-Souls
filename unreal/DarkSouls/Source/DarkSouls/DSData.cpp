@@ -333,17 +333,7 @@ namespace
 		{ TEXT("ember"), 0.f, 0.f, 1.f, 1.f, TEXT("But embers do not die."), TEXT("They wait."), TEXT(""), TEXT("THE END?") },
 	};
 	const FDSCreditLine GCredits[] = {
-		{ TEXT("THE ASH ROAD"), 44, true }, { TEXT("A knight, a princess, and a very long night."), 18, false }, { TEXT(""), 18, false },
-		{ TEXT("MADE WITH FREE ASSETS"), 24, true }, { TEXT(""), 10, false },
-		{ TEXT("Characters, wolf, imp and monsters"), 16, true },
-		{ TEXT("Quaternius - Universal Base Characters, Bestiary, Animated Animals (CC0)"), 15, false }, { TEXT(""), 10, false },
-		{ TEXT("Weapons, shields, props, trees and textures"), 16, true },
-		{ TEXT("Poly Haven artists (CC0)   -   Kenney (CC0)   -   KayKit (CC0)"), 15, false }, { TEXT(""), 10, false },
-		{ TEXT("Voices, monsters and ambience"), 16, true },
-		{ TEXT("EZduzziteh, HaelDB, rubberduck, Darsycho, Wolfgang_, Ecrivain, SketchMan3 (CC0)"), 15, false }, { TEXT(""), 10, false },
-		{ TEXT("The anatomical heart"), 16, true }, { TEXT("Scribe, OpenGameArt (CC0)"), 15, false }, { TEXT(""), 10, false },
-		{ TEXT("Terrain"), 16, true }, { TEXT("Terrain3D by Tokisan Games"), 15, false }, { TEXT(""), 10, false },
-		{ TEXT("Ported to Unreal Engine"), 16, true }, { TEXT(""), 24, false },
+		{ TEXT("Mark Obal"), 30, true }, { TEXT("Rin"), 30, true }, { TEXT("Rence Ferreras"), 30, true }, { TEXT(""), 24, false },
 		{ TEXT("THANK YOU FOR PLAYING"), 30, true }, { TEXT(""), 18, false }, { TEXT("tap to return"), 14, false },
 	};
 }

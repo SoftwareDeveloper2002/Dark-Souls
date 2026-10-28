@@ -37,6 +37,21 @@ def collect():
     return tasks
 
 
+MAP = "/Game/Maps/DarkSoulsMap"
+
+
+def make_map():
+    # DefaultEngine.ini points GameDefaultMap at this; the game builds the world at runtime and lays a floor when no landscape is present
+    if unreal.EditorAssetLibrary.does_asset_exist(MAP):
+        return
+    unreal.EditorAssetLibrary.make_directory("/Game/Maps")
+    if unreal.EditorLevelLibrary.new_level(MAP):
+        unreal.EditorLevelLibrary.save_current_level()
+        unreal.log("Created empty map " + MAP + " (add the Landscape from LANDSCAPE_IMPORT.txt if you want the real terrain)")
+    else:
+        unreal.log_warning("Could not create " + MAP + "; create it by hand (File > New Level > Empty) and save it there")
+
+
 def main():
     tasks = collect()
     unreal.log("Importing %d files from %s" % (len(tasks), SRC))
@@ -44,6 +59,7 @@ def main():
     for i in range(0, len(tasks), 25):
         tools.import_asset_tasks(tasks[i:i + 25])
         unreal.log("  %d / %d" % (min(i + 25, len(tasks)), len(tasks)))
+    make_map()
     unreal.log("Done. Characters are in /Game/Models/Characters, props in /Game/Models/Props, trees in /Game/Models/Forest.")
 
 
