@@ -21,6 +21,7 @@ ADSGame* ADSPlayerController::GetGame()
 void ADSPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
+	ActivateTouchInterface(nullptr);   // remove the engine's default on-screen joysticks; DSHUD draws the game's own
 	InputComponent->BindTouch(IE_Pressed, this, &ADSPlayerController::TouchDown);
 	InputComponent->BindTouch(IE_Released, this, &ADSPlayerController::TouchUp);
 	InputComponent->BindKey(EKeys::J, IE_Pressed, this, &ADSPlayerController::KeyAttack);
