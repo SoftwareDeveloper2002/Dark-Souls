@@ -1,4 +1,4 @@
-# Dark Souls mobile - Unreal Engine 5.5 port
+# Dark Souls mobile - Unreal Engine 5.6 port
 
 A C++ port of the Godot 4 game in this repo. The project is `unreal/DarkSouls/DarkSouls.uproject`.
 
@@ -6,7 +6,7 @@ A C++ port of the Godot 4 game in this repo. The project is `unreal/DarkSouls/Da
 
 ## Getting it running
 
-1. Install Unreal Engine 5.5 with the *Game development with C++* workload (Visual Studio 2022) and the Android/iOS target platforms if you want mobile builds.
+1. Install Unreal Engine 5.6 with the *Game development with C++* workload (Visual Studio 2022) and the Android/iOS target platforms if you want mobile builds.
 2. Right-click `DarkSouls.uproject` > *Generate Visual Studio project files*, open the `.sln`, build `DarkSoulsEditor` (Development Editor, Win64), or just double-click the `.uproject` and let it build.
 3. In the editor create the level: *File > New Level > Empty Level*, save it as `/Game/Maps/DarkSoulsMap` (the path `Config/DefaultEngine.ini` expects).
 4. Add the terrain (optional but recommended, see below). Without a Landscape the game lays a flat 6 km floor so it is playable immediately.
