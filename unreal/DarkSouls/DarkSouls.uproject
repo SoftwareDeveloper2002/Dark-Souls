@@ -11,5 +11,9 @@
 			"AdditionalDependencies": [ "Engine" ]
 		}
 	],
-	"Plugins": []
+	"Plugins": [
+		{ "Name": "PythonScriptPlugin", "Enabled": true },
+		{ "Name": "EditorScriptingUtilities", "Enabled": true },
+		{ "Name": "InterchangeEditor", "Enabled": true }
+	]
 }

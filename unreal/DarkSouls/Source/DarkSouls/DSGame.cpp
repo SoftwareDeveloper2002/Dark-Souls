@@ -181,7 +181,12 @@ void ADSGame::BuildWorld()
 		Moon->GetLightComponent()->SetIntensity(3.f);
 	}
 	Fog = W->SpawnActor<AExponentialHeightFog>(FVector(0, 0, 0), FRotator::ZeroRotator, Sp);
-	if (Fog) Fog->GetComponent()->SetFogDensity(0.004f);
+	if (Fog)
+	{
+		Fog->GetComponent()->SetFogDensity(0.0006f);
+		Fog->GetComponent()->SetFogMaxOpacity(0.55f);   // never let the fog swallow the ground
+		Fog->GetComponent()->SetStartDistance(2500.f);
+	}
 	Sky = W->SpawnActor<ASkyLight>(FVector(0, 0, 500), FRotator::ZeroRotator, Sp);
 	if (Sky)
 	{
@@ -235,7 +240,7 @@ void ADSGame::ApplyChapter(int32 Ch)
 		Moon->GetLightComponent()->SetLightColor(C.Moon);
 		MoonBase = C.MoonE;
 	}
-	if (Fog) Fog->GetComponent()->SetFogInscatteringColor(C.Fog * 6.f);
+	if (Fog) Fog->GetComponent()->SetFogInscatteringColor(C.Fog * 1.5f);
 	if (Sky)
 	{
 		Sky->GetLightComponent()->SetLightColor(C.Ambient);
