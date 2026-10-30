@@ -82,3 +82,12 @@ Sounds are looked up by name at runtime, and silently skipped when missing:
 Import them all once with `unreal/tools/import_assets.py` (see the header of that file). They land in `/Game/Models/...` and `/Game/Audio/...`. The game now dresses the hero, the hound and every humanoid enemy in their imported model through `ADSVisual::AttachModel` (called from `BuildPlayerFigure` / `BuildFigure`): it searches `/Game/Models/Characters` for an asset named after the character (`hero`, `zombie`, ...), scales it to the figure's height and hides the primitive body / head. If a model has not been imported the figure stays as primitives, so nothing breaks. Skinned bodies stand in their rest pose; the actor still leans, swings and falls procedurally. Not yet compiled or run (no Unreal install was available); if a model faces sideways change the `YawOffsetDeg` argument of `AttachModel`.
 
 The same lookup now dresses the camp tents (`medieval_tent`), camp rocks and boss standing stones (`RockA/B/C`), the bonfire (`stone_fire_pit`), the labyrinth chests (`treasure_chest`) and the forest (instanced `pine_1` / `pine_2` from `/Game/Models/Forest`). Music, voices and sound effects were already loaded from `/Game/Audio/Music`, `/Vox` and `/Sfx`, which the import script fills. Every one of them falls back to the old primitive when its asset is missing. Chest lids no longer swing when an imported chest model is used (the lid animation drives the hidden primitive).
+
+## Models, motion and what is wired (current)
+- Run `IMPORT_ASSETS.bat` once (engine closed). It imports every model and sound under `Content/ImportSource`.
+- Hero: weapons (greatsword / mace / estoc / pistol) and kite shield are imported meshes that follow the game's swing paths.
+- Enemies: character model + own weapon mesh (hatchet, estoc, greatsword, war hammer, mace) and kite shield; the weapon is raised on the wind-up and thrown down on the strike.
+- Body motion on every imported character (stride bob/sway, lunge, recoil, breathing) comes from `ADSVisual::SetMotion`; the models are static meshes, so the motion is whole-body.
+- Camps: barrels, crates, baskets, buckets, lanterns, oil lamp, stump + axe, dead trunks. Forest: pines, firs, dead trees, bushes, logs. Civilians: villager_m / villager_f.
+- Terrain is still a manual step (see `Content/ImportSource/LANDSCAPE_IMPORT.txt`); without it the game lays a flat floor.
+- If a weapon points the wrong way, its mesh's longest axis was auto-detected as "up"; flip it in `ADSVisual::AddStaticModel`.

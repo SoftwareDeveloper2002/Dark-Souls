@@ -54,6 +54,18 @@ public:
 	 */
 	bool AttachModel(const FString& Folder, const FString& Key, float HeightMetres, const TArray<int32>& HidePrimitives, float YawOffsetDeg = 0.f);
 
+	/**
+	 * Adds a free-standing imported static mesh scaled so its longest side is LongestMetres. bLongAxisUp turns that side to point up (swords, spears),
+	 * bFaceForward turns the thinnest horizontal side to face +X (shields). Returns a holder to move / rotate / hide, or null when not imported.
+	 */
+	USceneComponent* AddStaticModel(const FString& Folder, const FString& Key, float LongestMetres, bool bLongAxisUp, bool bFaceForward = false);
+
+	/** The imported weapon an enemy carries (null when none / not imported); SyncEnemy swings it. */
+	UPROPERTY() TObjectPtr<USceneComponent> Weapon;
+
+	/** Body motion for the imported model, pivoting at the feet: offset (metres, actor-local), rotation (degrees) and a height multiplier (squash / stretch). */
+	void SetMotion(const FVector& OffsetM, const FRotator& Rot, float ScaleZ = 1.f);
+
 	/** Sim position (metres, game plane) + height above ground (metres) + facing angle (radians, 0 = +X). */
 	void Place(const FVector& WorldCm, float FacingRad);
 
@@ -61,7 +73,9 @@ private:
 	UPROPERTY() TObjectPtr<USceneComponent> Pivot;
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Parts;
 	UPROPERTY() TArray<TObjectPtr<UMaterialInstanceDynamic>> Mats;
-	UPROPERTY() TObjectPtr<USceneComponent> Model;
+	UPROPERTY() TObjectPtr<USceneComponent> Model;       // the imported mesh itself
+	UPROPERTY() TObjectPtr<USceneComponent> Rig;         // feet-level holder SetMotion moves
+	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> FlashMat;
 	TArray<FLinearColor> BaseColors;
 	bool bFlash = false;
 	bool bShadows = true;

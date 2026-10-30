@@ -581,6 +581,7 @@ void ADSGame::CivSpawn(const TArray<FVector2D>& Spots)
 		ADSVisual* V = GetWorld()->SpawnActor<ADSVisual>(P3(C.Pos), FRotator::ZeroRotator);
 		V->AddPart(EDSShape::Cylinder, FVector(0, 0, 0.8), FVector(0.55, 0.55, 1.0), Cloth);
 		V->AddPart(EDSShape::Sphere, FVector(0, 0, 1.55), FVector(0.38), FLinearColor(0.75f, 0.6f, 0.5f));
+		V->AttachModel(TEXT("Characters"), i % 2 == 0 ? TEXT("villager_m") : TEXT("villager_f"), 1.7f, { 0, 1 });   // cloth cylinder + head primitives
 		V->SetShadows(false);
 		C.Fig = V;
 		ADSVisual* B = GetWorld()->SpawnActor<ADSVisual>(P3(C.Pos, 12.f), FRotator::ZeroRotator);
@@ -672,6 +673,7 @@ void ADSGame::CivUpdate(float Dt)
 		C.HitT = FMath::Max(0.f, C.HitT - Dt);
 		ADSVisual* Fig = C.Fig.Get();
 		if (!Fig || C.State == 4) continue;
+		const FVector2D PosBefore = C.Pos;
 		// monsters maul any civilian they reach; enemy shots that hit one are stopped by it
 		if ((C.State == 0 || C.State == 1 || C.State == 2) && MazeFailT < 0.f && !bExecActive)
 		{
@@ -743,6 +745,13 @@ void ADSGame::CivUpdate(float Dt)
 		float Pitch = C.State == 5 ? -85.f : (C.State == 0 || C.State == 2 ? 28.f : 0.f);
 		if (C.HitT > 0.f) Loc.X += FMath::Sin(Time * 60.f) * 3.0;
 		Fig->SetActorLocationAndRotation(Loc, FRotator(Pitch, FMath::RadiansToDegrees(C.Face), 0));
+		// walking gait from how far they really moved; a hiding villager trembles
+		const float Dist = FVector2D::Distance(C.Pos, PosBefore);
+		const float Sp = FMath::Clamp(Dist / FMath::Max(Dt, 0.0001f) / 4.6f, 0.f, 1.f);
+		C.Walk += Dist * 2.6f;
+		FRotator R(-5.f * Sp, FMath::Sin(C.Walk) * 6.f * Sp, FMath::Sin(C.Walk) * 5.f * Sp);
+		if (C.State == 0) R.Roll += FMath::Sin(Time * 32.f + i) * 2.5f;
+		Fig->SetMotion(FVector(0, 0, FMath::Abs(FMath::Sin(C.Walk)) * 0.06f * Sp), R, 1.f + 0.012f * FMath::Sin(Time * 2.f + i) * (1.f - Sp));
 	}
 }
 
@@ -856,6 +865,16 @@ void ADSGame::MakeForestChunk(int32 Cx, int32 Cy)
 	UInstancedStaticMeshComponent* Pines[2] = {
 		V->AddInstancedModel(TEXT("Forest"), TEXT("pine_1"), PineH[0], PineBase[0]),
 		V->AddInstancedModel(TEXT("Forest"), TEXT("pine_2"), PineH[1], PineBase[1]) };
+	// extra variety: firs, dead trees, real bushes and fallen logs (each is skipped when its model has not been imported)
+	float FirH = 1.f, FirBase = 0.f, DeadH[2] = { 1.f, 1.f }, DeadBase[2] = { 0.f, 0.f }, BushH[2] = { 1.f, 1.f }, BushBase[2] = { 0.f, 0.f }, LogH = 1.f, LogBase = 0.f;
+	UInstancedStaticMeshComponent* Fir = V->AddInstancedModel(TEXT("Forest"), TEXT("fir_1"), FirH, FirBase);
+	UInstancedStaticMeshComponent* Deads[2] = {
+		V->AddInstancedModel(TEXT("Forest"), TEXT("dead_1"), DeadH[0], DeadBase[0]),
+		V->AddInstancedModel(TEXT("Forest"), TEXT("dead_2"), DeadH[1], DeadBase[1]) };
+	UInstancedStaticMeshComponent* Bushes[2] = {
+		V->AddInstancedModel(TEXT("Forest"), TEXT("bush_1"), BushH[0], BushBase[0]),
+		V->AddInstancedModel(TEXT("Forest"), TEXT("bush_2"), BushH[1], BushBase[1]) };
+	UInstancedStaticMeshComponent* Logs = V->AddInstancedModel(TEXT("Forest"), TEXT("log_1"), LogH, LogBase);
 	const float Step = 3.7f;
 	const int32 Cnt = (int32)(Chunk / Step);
 	for (int32 Gx = 0; Gx < Cnt; Gx++)
@@ -871,15 +890,40 @@ void ADSGame::MakeForestChunk(int32 Cx, int32 Cy)
 			if (FMath::Abs(Ground(P + FVector2D(1.6, 0)) - H) > 2.3f || FMath::Abs(Ground(P + FVector2D(0, 1.6)) - H) > 2.3f) continue;
 			const bool bDead = Kind < 0.06f;
 			const int32 Pk = (Bx < 0.5f) ? 0 : 1;
-			const bool bPine = !bDead && Pines[Pk] != nullptr;
-			if (bPine)
+			const bool bFir = !bDead && Fir != nullptr && Bx > 0.78f;         // about a fifth of the trees are firs
+			const bool bPine = !bDead && !bFir && Pines[Pk] != nullptr;
+			const int32 Dk = By < 0.5f ? 0 : 1;
+			const bool bDeadModel = bDead && Deads[Dk] != nullptr;
+			if (bFir)
+			{
+				const float K = (10.0f * S) / FirH;
+				ADSVisual::AddInstance(Fir, FVector(P.X * 100.0, P.Y * 100.0, (H - FirBase * K) * 100.0), FVector(K), Yaw);
+			}
+			else if (bDeadModel)
+			{
+				const float K = (6.0f * S) / DeadH[Dk];
+				ADSVisual::AddInstance(Deads[Dk], FVector(P.X * 100.0, P.Y * 100.0, (H - DeadBase[Dk] * K) * 100.0), FVector(K), Yaw);
+			}
+			else if (bPine)
 			{
 				const float K = (9.0f * S) / PineH[Pk];       // a pine is about 9 m tall
 				ADSVisual::AddInstance(Pines[Pk], FVector(P.X * 100.0, P.Y * 100.0, (H - PineBase[Pk] * K) * 100.0), FVector(K), Yaw);
 			}
 			else
 				ADSVisual::AddInstance(Trunk, FVector(P.X * 100.0, P.Y * 100.0, (H + 1.6f * S) * 100.0), FVector(0.55 * S, 0.55 * S, 3.2 * S), Yaw);
-			if (!bDead && !bPine)
+			// undergrowth beside real trees, and now and then a fallen log
+			if ((bPine || bFir) && Bx < 0.5f && Bushes[Dk])
+			{
+				const FVector2D Bp = P + FromAngle(By * 6.28f) * (1.4f + By * 1.4f);
+				const float K = (1.3f * S) / BushH[Dk];
+				ADSVisual::AddInstance(Bushes[Dk], FVector(Bp.X * 100.0, Bp.Y * 100.0, (Ground(Bp) - BushBase[Dk] * K) * 100.0), FVector(K), Yaw + 1.f);
+			}
+			if (Logs && Kind > 0.95f)
+			{
+				const FVector2D Lp = P + FromAngle(Yaw) * 2.2f;
+				ADSVisual::AddInstance(Logs, FVector(Lp.X * 100.0, Lp.Y * 100.0, (Ground(Lp) - LogBase * S) * 100.0), FVector(S), Yaw);
+			}
+			if (!bDead && !bPine && !bFir)
 			{
 				ADSVisual::AddInstance(Leaf, FVector(P.X * 100.0, P.Y * 100.0, (H + 4.6f * S) * 100.0), FVector(2.8 * S, 2.8 * S, 6.5 * S), Yaw);
 				if (Bx < 0.55f)

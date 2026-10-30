@@ -393,6 +393,29 @@ void ADSGame::BuildCamp(const FVector2D& C, int32 Ch, bool bBoss)
 			CampProps.Add(S);
 		}
 	}
+	// lived-in camp: supplies beside each tent, lanterns out front, a chopping stump, and dead trunks round the edge (skipped silently when not imported)
+	auto Dress = [&](const TCHAR* Key, const FVector2D& P, float H, float YawDeg)
+	{
+		ADSVisual* D = GetWorld()->SpawnActor<ADSVisual>(P3(P), FRotator(0, YawDeg, 0));
+		if (D->AttachModel(TEXT("Props"), Key, H, {})) CampProps.Add(D); else D->Destroy();
+	};
+	if (!bBoss)
+	{
+		for (int32 i = 0; i < Tents; i++)
+		{
+			const float A = (float)i / Tents * 2.f * PI + 0.4f;
+			Dress(i % 2 == 0 ? TEXT("wooden_barrels_01") : TEXT("wooden_crate_01"), C + FromAngle(A + 0.30f) * 11.6f, 1.0f, i * 53.f);
+			Dress(i % 2 == 0 ? TEXT("wooden_crate_02") : TEXT("wicker_basket_01"), C + FromAngle(A - 0.32f) * 11.2f, 0.8f, i * 91.f + 20.f);
+			Dress(TEXT("wooden_lantern_01"), C + FromAngle(A + 0.12f) * 7.9f, 1.5f, i * 37.f);
+		}
+		Dress(TEXT("wooden_bucket_01"), C + FVector2D(2.1f, 4.6f), 0.4f, 30.f);
+		Dress(TEXT("wicker_basket_01"), C + FVector2D(-2.4f, 4.2f), 0.55f, 110.f);
+		Dress(TEXT("vintage_oil_lamp"), C + FVector2D(1.6f, 1.9f), 0.5f, 0.f);
+		Dress(TEXT("tree_stump_01"), C + FVector2D(-4.8f, 1.2f), 0.7f, 40.f);
+		Dress(TEXT("wooden_axe_03"), C + FVector2D(-4.8f, 1.2f), 0.75f, 70.f);       // left standing at the stump
+		Dress(TEXT("dead_tree_trunk"), C + FromAngle(1.9f) * 15.f, 4.0f, 15.f);
+		Dress(TEXT("dead_tree_trunk_02"), C + FromAngle(4.6f) * 15.5f, 3.6f, 200.f);
+	}
 	BuildBonfire(C + FVector2D(0, 3));
 	EmblemsCampBuilt(QuestN, C);
 }

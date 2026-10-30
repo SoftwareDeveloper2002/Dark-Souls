@@ -577,6 +577,10 @@ void ADSGame::BuildPlayerFigure()
 	PlayerFig->AddPart(EDSShape::Cone, FVector(0.6, 0.35, 1.75), FVector(0.3, 0.3, 0.5), FLinearColor(1.f, 0.65f, 0.2f) * 5.f);         // 6 flame
 	// the imported hero (body / head / visor hidden; sword, shield and torch stay as the game animates them)
 	PlayerFig->AttachModel(TEXT("Characters"), TEXT("hero"), 1.9f, { 0, 1, 4 });
+	// imported weapons and shield: built at 1 m and scaled to the game's blade length each frame (see SyncPlayer)
+	static const TCHAR* WeaponKeys[4] = { TEXT("oga_heavy_greatsword"), TEXT("ornate_medieval_mace"), TEXT("antique_estoc"), TEXT("service_pistol") };
+	for (int32 i = 0; i < 4; i++) PWeapHold[i] = PlayerFig->AddStaticModel(TEXT("Props"), WeaponKeys[i], 1.f, true);
+	PShieldHold = PlayerFig->AddStaticModel(TEXT("Props"), TEXT("kite_shield"), 0.95f, false, true);
 	PlayerFig->SetActorHiddenInGame(true);
 }
 
@@ -619,7 +623,28 @@ ADSVisual* ADSGame::BuildFigure(EDSEnemy Type)
 		TEXT("hound"), TEXT("knight"), TEXT("stonesoldier"), TEXT("brute"), TEXT("captain"), TEXT("demon"), TEXT("serpent"), TEXT("cyborg"), TEXT("malakar") };
 	if ((int32)Type < UE_ARRAY_COUNT(Keys) && Type != EDSEnemy::Cyborg)
 		V->AttachModel(TEXT("Characters"), Keys[(int32)Type], 1.85f * Hs, { 0, 1, 3 });   // body, head and eyes: the model replaces them
-	if (C.bShield) V->AddPart(EDSShape::Cube, FVector(0.45 * S, -0.55 * S, 1.1 * Hs), FVector(0.12, 0.65 * S, 0.85 * S), FLinearColor(0.3f, 0.3f, 0.35f));
+	// the character models carry no gear, so the weapon is its own imported mesh in the right hand (primitives stay as the fallback)
+	static const TCHAR* EnemyWeapons[] = { TEXT("hatchet"), nullptr, nullptr, TEXT("antique_estoc"), nullptr, nullptr, nullptr, nullptr,
+		nullptr, TEXT("oga_heavy_greatsword"), TEXT("antique_estoc"), TEXT("ornate_war_hammer"), TEXT("ornate_medieval_mace"), TEXT("ornate_war_hammer"),
+		nullptr, nullptr, TEXT("oga_heavy_greatsword") };
+	if ((int32)Type < UE_ARRAY_COUNT(EnemyWeapons) && EnemyWeapons[(int32)Type])
+	{
+		V->Weapon = V->AddStaticModel(TEXT("Props"), EnemyWeapons[(int32)Type], 1.4f * Hs, true);
+		if (V->Weapon)
+		{
+			V->GetPart(2)->SetVisibility(false);
+			V->Weapon->SetRelativeLocation(FVector(0.5 * S, 0.45 * S, 1.2 * Hs) * 100.0);
+		}
+	}
+	if (C.bShield)
+	{
+		const int32 Si = V->AddPart(EDSShape::Cube, FVector(0.45 * S, -0.55 * S, 1.1 * Hs), FVector(0.12, 0.65 * S, 0.85 * S), FLinearColor(0.3f, 0.3f, 0.35f));
+		if (USceneComponent* Sh = V->AddStaticModel(TEXT("Props"), TEXT("kite_shield"), 1.0f * Hs, false, true))
+		{
+			V->GetPart(Si)->SetVisibility(false);
+			Sh->SetRelativeLocation(FVector(0.45 * S, -0.55 * S, 1.1 * Hs) * 100.0);
+		}
+	}
 	if (Type == EDSEnemy::Cyborg)
 	{
 		V->AddPart(EDSShape::Cube, FVector(0, 0, 6.0), FVector(5.0, 8.0, 7.0), Col);
@@ -650,6 +675,33 @@ void ADSGame::SyncPlayer(float Dt)
 	PlayerFig->SetActorLocationAndRotation(Pos, FRotator(Pitch, FMath::RadiansToDegrees(PFace), 0.0));
 	PlayerFig->SetFlash(PFlash > 0.f);
 
+	// body motion on the imported model: stride bob and sway, a wind-up and lunge on attacks, a guarded crouch, a recoil when hurt, breathing at rest.
+	// (a forward lean is a negative pitch; the weapon and shield below follow the same offset)
+	FVector BodyOff(0, 0, 0);
+	{
+		const float Sp = FMath::Clamp(PMoveSpeed / 6.f, 0.f, 1.f);
+		if (PMoveSpeed > 0.2f) PWalkPh += Dt * (4.f + PMoveSpeed * 1.5f);
+		BodyOff.Z = FMath::Abs(FMath::Sin(PWalkPh)) * 0.07f * Sp;
+		FRotator R(-7.f * Sp, FMath::Sin(PWalkPh) * 5.f * Sp, FMath::Sin(PWalkPh) * 4.f * Sp);   // pitch, yaw, roll
+		float Sz = 1.f;
+		if (PAct == EDSAct::Attack && PAtk.Time > 0.f)
+		{
+			const float K = FMath::Clamp(PActT / PAtk.Time, 0.f, 1.f);
+			const float Wind = FMath::Clamp(1.f - K / 0.3f, 0.f, 1.f);        // rear back first...
+			const float Lunge = FMath::Sin(K * PI);                           // ...then throw the body forward
+			R.Pitch += 10.f * Wind - 16.f * Lunge;
+			R.Yaw += (PAtk.Anim == TEXT("slash_l") ? -1.f : 1.f) * (K - 0.5f) * -26.f;
+			BodyOff.X += 0.45f * Lunge - 0.08f * Wind;
+			Sz -= 0.04f * Lunge;
+		}
+		else if (PAct == EDSAct::Roll) { R.Pitch = -20.f; Sz = 0.8f; }
+		else if (PAct == EDSAct::Drink) R.Pitch += 12.f;
+		if (PBlock > 0.f) { R.Pitch += 6.f * PBlock; BodyOff.X -= 0.06f * PBlock; Sz -= 0.05f * PBlock; }
+		if (PStun > 0.f) { R.Pitch += 16.f; BodyOff.X -= 0.12f; R.Roll += FMath::Sin(Time * 40.f) * 3.f; }
+		if (PAct != EDSAct::Dead && Sp < 0.1f && PAct == EDSAct::Idle) Sz *= 1.f + 0.012f * FMath::Sin(Time * 2.2f);   // breathing
+		PlayerFig->SetMotion(BodyOff, R, Sz);
+	}
+
 	// weapon + shield poses (parts 2 and 3)
 	const EDSWeapon W = Equipped;
 	const FDSWeaponDef& WD = DSData::Weapon(W);
@@ -662,7 +714,11 @@ void ADSGame::SyncPlayer(float Dt)
 	UStaticMeshComponent* Shield = PlayerFig->GetPart(3);
 	if (Blade && Shield)
 	{
-		Blade->SetVisibility(bHasWeapon && !bTorchHeld);
+		const bool bShowBlade = bHasWeapon && !bTorchHeld;
+		USceneComponent* WModel = PWeapHold[(int32)W];
+		Blade->SetVisibility(bShowBlade && !WModel);                 // the primitive blade is only the fallback
+		for (int32 i = 0; i < 4; i++)
+			if (PWeapHold[i]) PWeapHold[i]->SetVisibility(bShowBlade && i == (int32)W, true);
 		if (UStaticMeshComponent* Ts = PlayerFig->GetPart(5)) Ts->SetVisibility(bTorchHeld);
 		if (UStaticMeshComponent* Tf = PlayerFig->GetPart(6)) Tf->SetVisibility(bTorchHeld);
 		Blade->SetRelativeScale3D(BladeScale);
@@ -694,13 +750,27 @@ void ADSGame::SyncPlayer(float Dt)
 				Rot = FRotator(90, FMath::RadiansToDegrees(A), 0);
 			}
 		}
+		Loc += BodyOff;
 		Blade->SetRelativeLocation(Loc * 100.0);
 		Blade->SetRelativeRotation(Rot);
+		if (WModel)
+		{
+			WModel->SetRelativeLocation(Loc * 100.0);
+			WModel->SetRelativeRotation(Rot);
+			WModel->SetRelativeScale3D(FVector(BladeScale.Z));       // built at 1 m long; the blade's Z scale is its length in metres
+		}
 
-		Shield->SetVisibility(!bGun);
+		Shield->SetVisibility(!bGun && !PShieldHold);
 		const float B = PBlock;
-		Shield->SetRelativeLocation(FVector(FMath::Lerp(0.2, 0.75, B), FMath::Lerp(-0.55, 0.0, B), 1.1) * 100.0);
+		const FVector ShieldLoc = FVector(FMath::Lerp(0.2, 0.75, B), FMath::Lerp(-0.55, 0.0, B), 1.1) + BodyOff;
+		Shield->SetRelativeLocation(ShieldLoc * 100.0);
 		Shield->SetRelativeRotation(FRotator(0, FMath::Lerp(0.f, 0.f, B), 0));
+		if (PShieldHold)
+		{
+			PShieldHold->SetVisibility(!bGun, true);
+			PShieldHold->SetRelativeLocation(ShieldLoc * 100.0);
+			PShieldHold->SetRelativeRotation(FRotator(0.f, 0.f, FMath::Lerp(0.f, -8.f, B)));
+		}
 	}
 	if (PStone > 0.f) PlayerFig->SetPartColor(0, FLinearColor(0.5f, 0.5f, 0.48f));
 	else PlayerFig->SetPartColor(0, PRage > 0.f ? FLinearColor(0.7f, 0.2f, 0.15f) : FLinearColor(0.45f, 0.47f, 0.52f));
@@ -724,6 +794,31 @@ void ADSGame::SyncEnemy(FDSEnemy& E, float Dt)
 	if (E.Type == EDSEnemy::Fist) Pos.Z += FMath::Max(0.f, 18.f - E.Life * 80.f) * 100.0;
 	F->SetActorLocationAndRotation(Pos, FRotator(Pitch, FMath::RadiansToDegrees(E.Face), 0.0));
 	F->SetFlash(E.Flash > 0.f);
+	// body motion on the imported model: stride bob and sway, a step back on the wind-up and a lunge on the strike, a shudder when staggered, breathing when still
+	{
+		const float Sp = FMath::Clamp(E.Mv / 4.f, 0.f, 1.f);
+		const float Ph = E.Walk * 2.2f;
+		FVector Off(0, 0, FMath::Abs(FMath::Sin(Ph)) * 0.08f * Sp);
+		FRotator R(0.f, FMath::Sin(Ph) * 6.f * Sp, FMath::Sin(Ph) * 5.f * Sp);
+		const float Sz = 1.f + 0.014f * FMath::Sin(Time * 1.9f + (float)E.Pos.X) * (1.f - Sp);
+		if (E.St == EDSEState::Strike) Off.X += 0.4f;
+		if (E.St == EDSEState::Wind) Off.X -= 0.15f;
+		if (E.St == EDSEState::Stagger) R.Roll += FMath::Sin(Time * 45.f) * 4.f;
+		F->SetMotion(Off, R, Sz);
+		// the weapon arm: raised on the wind-up, thrown down on the strike, a loose sway while walking
+		if (F->Weapon)
+		{
+			const float Ws = FMath::Pow(DSData::Enemy(E.Type).R / 0.7f, 0.7f);
+			FRotator Target(0.f, 0.f, -15.f + FMath::Sin(Ph) * 6.f * Sp);
+			FVector At(0.5f * (DSData::Enemy(E.Type).R / 0.7f), 0.45f * (DSData::Enemy(E.Type).R / 0.7f), 1.2f * Ws);
+			if (E.St == EDSEState::Wind) { Target = FRotator(55.f, 0.f, -10.f); At.Z += 0.5f * Ws; At.X -= 0.2f; }
+			else if (E.St == EDSEState::Strike) { Target = FRotator(-100.f, 0.f, 0.f); At.X += 0.5f; At.Z -= 0.1f; }
+			const FRotator Cur = F->Weapon->GetRelativeRotation();
+			const float Rate = (E.St == EDSEState::Strike) ? 30.f : 10.f;
+			F->Weapon->SetRelativeRotation(FRotator(FMath::FInterpTo(Cur.Pitch, Target.Pitch, Dt, Rate), 0.f, FMath::FInterpTo(Cur.Roll, Target.Roll, Dt, Rate)));
+			F->Weapon->SetRelativeLocation(FMath::VInterpTo(F->Weapon->GetRelativeLocation(), (At + Off) * 100.0, Dt, Rate));
+		}
+	}
 	if (E.AI == EDSAI::Boss) BossVisuals(E, Dt);
 	// the idle camp waits a little hidden in the ground until you are close enough to be seen
 }

@@ -5,6 +5,7 @@
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
+#include "Components/MeshComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -100,10 +101,15 @@ bool ADSVisual::AttachModel(const FString& Folder, const FString& Key, float Hei
 	}
 	if (!MC) return false;
 
+	// the rig sits at the feet, so leaning / bobbing / squashing pivots there rather than on the mesh origin
+	Rig = NewObject<USceneComponent>(this);
+	Rig->SetMobility(EComponentMobility::Movable);
+	Rig->SetupAttachment(Pivot);
+	Rig->RegisterComponent();
 	MC->SetMobility(EComponentMobility::Movable);
 	MC->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	MC->SetCastShadow(bShadows);
-	MC->SetupAttachment(Pivot);
+	MC->SetupAttachment(Rig);
 	MC->RegisterComponent();
 	// scale to the requested height (the importer gives centimetres), stand it on the ground and turn it to face +X
 	const float HeightCm = FMath::Max(Bounds.BoxExtent.Z * 2.f, 1.f);
@@ -115,6 +121,49 @@ bool ADSVisual::AttachModel(const FString& Folder, const FString& Key, float Hei
 	for (int32 I : HidePrimitives)
 		if (Parts.IsValidIndex(I) && Parts[I]) Parts[I]->SetVisibility(false);
 	return true;
+}
+
+USceneComponent* ADSVisual::AddStaticModel(const FString& Folder, const FString& Key, float LongestMetres, bool bLongAxisUp, bool bFaceForward)
+{
+	UStaticMesh* SM = Cast<UStaticMesh>(DSFindModel(Folder, Key));
+	if (!SM) return nullptr;
+	const FBoxSphereBounds B = SM->GetBounds();
+	const FVector Ext = B.BoxExtent;
+	int32 Axis = 0;
+	if (Ext.Y > Ext[Axis]) Axis = 1;
+	if (Ext.Z > Ext[Axis]) Axis = 2;
+	const float S = (LongestMetres * 100.f) / FMath::Max(Ext[Axis] * 2.f, 1.f);
+
+	FQuat Q = FQuat::Identity;
+	if (bLongAxisUp && Axis != 2)
+		Q = FQuat::FindBetweenNormals(Axis == 0 ? FVector::XAxisVector : FVector::YAxisVector, FVector::ZAxisVector);
+	else if (bFaceForward && Ext.Y < Ext.X)
+		Q = FQuat(FVector::ZAxisVector, PI * 0.5);
+
+	USceneComponent* Holder = NewObject<USceneComponent>(this);
+	Holder->SetMobility(EComponentMobility::Movable);
+	Holder->SetupAttachment(Pivot);
+	Holder->RegisterComponent();
+
+	UStaticMeshComponent* C = NewObject<UStaticMeshComponent>(this);
+	C->SetMobility(EComponentMobility::Movable);
+	C->SetStaticMesh(SM);
+	C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	C->SetCastShadow(bShadows);
+	C->SetupAttachment(Holder);
+	C->RegisterComponent();
+	C->SetRelativeScale3D(FVector(S));
+	C->SetRelativeRotation(Q);
+	C->SetRelativeLocation(-Q.RotateVector(B.Origin) * S);     // centre the mesh on the holder
+	return Holder;
+}
+
+void ADSVisual::SetMotion(const FVector& OffsetM, const FRotator& Rot, float ScaleZ)
+{
+	if (!Rig) return;
+	Rig->SetRelativeLocation(OffsetM * 100.0);
+	Rig->SetRelativeRotation(Rot);
+	Rig->SetRelativeScale3D(FVector(1.f, 1.f, ScaleZ));
 }
 
 void ADSVisual::SetPartColor(int32 I, const FLinearColor& Col)
@@ -133,6 +182,17 @@ void ADSVisual::SetFlash(bool bOn)
 {
 	if (bOn == bFlash) return;
 	bFlash = bOn;
+	// imported models carry their own materials, so the hit flash is a bright overlay drawn on top of them
+	if (UMeshComponent* MM = Cast<UMeshComponent>(Model))
+	{
+		if (bOn && !FlashMat)
+			if (UMaterialInterface* Base = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial")))
+			{
+				FlashMat = UMaterialInstanceDynamic::Create(Base, this);
+				if (FlashMat) FlashMat->SetVectorParameterValue(TEXT("Color"), FLinearColor(3.f, 3.f, 3.f));
+			}
+		MM->SetOverlayMaterial(bOn ? FlashMat.Get() : nullptr);
+	}
 	for (int32 i = 0; i < Mats.Num(); i++)
 		if (Mats[i]) Mats[i]->SetVectorParameterValue(TEXT("Color"), bOn ? FLinearColor(3.f, 3.f, 3.f) : BaseColors[i]);
 }

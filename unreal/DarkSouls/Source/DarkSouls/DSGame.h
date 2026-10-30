@@ -129,6 +129,9 @@ public:
 	float PRollDir = 0.f, PInv = 0.f, PStun = 0.f, PStone = 0.f, PFlash = 0.f, PSinceHit = 0.f, PGunCd = 0.f, PRage = 0.f;
 	int32 PSkl = 0, PHitI = 0, PCombo = -1;
 	float PComboWin = 0.f, PMoveSpeed = 0.f;
+	float PWalkPh = 0.f;                                  // stride phase for the body motion
+	UPROPERTY() TObjectPtr<USceneComponent> PWeapHold[4]; // imported weapon per EDSWeapon (null when not imported)
+	UPROPERTY() TObjectPtr<USceneComponent> PShieldHold;
 	bool bHasWeapon = false;
 	TArray<int32> PHitList;
 	struct FAtk { FString Anim; float Dmg = 1, Range = 1, Arc = 1, Time = 0.42f, HitT = 0.14f, Lunge = 1, Kb = 1; bool bSlam = false; TArray<float> Hits; } PAtk;
